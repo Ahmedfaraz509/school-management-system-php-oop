@@ -1,445 +1,474 @@
 <?php
+// ResultsProcess.php
 require_once '../database/connect.php';
 
 class ResultsProcess
 {
   private $conn;
-  public $id;
-  public $student_id;
-  public $exam_id;
-  public $subject_id;
-  public $marks_obtained;
-  public $total_marks;
-  public $percentage;
-  public $grade;
-  public $result;
-  public $created_at;
 
-  // Constructor with database connection
   public function __construct($conn)
   {
     $this->conn = $conn;
   }
 
-  // Set result data
-  public function setData($id, $student_id, $exam_id, $subject_id, $marks_obtained, $total_marks, $percentage, $grade, $result, $created_at)
+  /**
+   * Get results with filters
+   */
+  public function getResults($teacher_id, $filters = [])
   {
-    $this->id = $id;
-    $this->student_id = $student_id;
-    $this->exam_id = $exam_id;
-    $this->subject_id = $subject_id;
-    $this->marks_obtained = $marks_obtained;
-    $this->total_marks = $total_marks;
-    $this->percentage = $percentage;
-    $this->grade = $grade;
-    $this->result = $result;
-    $this->created_at = $created_at;
+    $query = "
+            SELECT 
+                r.id,
+                r.student_id,
+                r.exam_id,
+                r.subject_id,
+                r.marks_obtained,
+                r.total_marks,
+                r.percentage,
+                r.grade,
+                r.result,
+                r.created_at,
+                s.first_name,
+                s.last_name,
+                s.student_uid,
+                s.gender,
+                sub.subject_title,
+                sub.subject_code,
+                c.id as class_id,
+                c.name as class_name,
+                c.grade as class_grade,
+                e.exam_title,
+                e.exam_date
+            FROM results r
+            LEFT JOIN students s ON r.student_id = s.id
+            LEFT JOIN subjects sub ON r.subject_id = sub.id
+            LEFT JOIN classes c ON s.class_id = c.id
+            LEFT JOIN exams e ON r.exam_id = e.id
+            WHERE 1=1
+        ";
+
+    $params = [];
+
+    // Teacher filter
+    $query .= " AND (sub.teacher_id = :teacher_id OR c.teacher_id = :teacher_id)";
+    $params[':teacher_id'] = $teacher_id;
+
+    // Class filter
+    if (!empty($filters['class_id'])) {
+      $query .= " AND c.id = :class_id";
+      $params[':class_id'] = $filters['class_id'];
+    }
+
+    // Subject filter
+    if (!empty($filters['subject_id'])) {
+      $query .= " AND sub.id = :subject_id";
+      $params[':subject_id'] = $filters['subject_id'];
+    }
+
+    // Exam filter
+    if (!empty($filters['exam_id'])) {
+      $query .= " AND e.id = :exam_id";
+      $params[':exam_id'] = $filters['exam_id'];
+    }
+
+    // Student search
+    if (!empty($filters['search'])) {
+      $query .= " AND (s.first_name LIKE :search OR s.last_name LIKE :search OR s.student_uid LIKE :search)";
+      $params[':search'] = '%' . $filters['search'] . '%';
+    }
+
+    // Result filter
+    if (!empty($filters['result'])) {
+      $query .= " AND r.result = :result";
+      $params[':result'] = $filters['result'];
+    }
+
+    $query .= " ORDER BY s.first_name ASC";
+
+    $stmt = $this->conn->prepare($query);
+    foreach ($params as $key => $value) {
+      $stmt->bindValue($key, $value);
+    }
+    $stmt->execute();
+
+    return $stmt->fetchAll();
   }
 
-  // Calculate grade based on percentage
-  private function calculateGrade($percentage)
+  /**
+   * Get result by ID
+   */
+  public function getResultById($result_id)
+  {
+    $query = "
+            SELECT 
+                r.*,
+                s.first_name,
+                s.last_name,
+                s.student_uid,
+                sub.subject_title,
+                sub.subject_code,
+                e.exam_title,
+                e.exam_date
+            FROM results r
+            LEFT JOIN students s ON r.student_id = s.id
+            LEFT JOIN subjects sub ON r.subject_id = sub.id
+            LEFT JOIN exams e ON r.exam_id = e.id
+            WHERE r.id = :id
+        ";
+
+    $stmt = $this->conn->prepare($query);
+    $stmt->bindValue(':id', $result_id);
+    $stmt->execute();
+
+    return $stmt->fetch();
+  }
+
+  /**
+   * Add or update a result
+   */
+  public function saveResult($data)
+  {
+    // Calculate percentage and grade
+    $percentage = round(($data['marks_obtained'] / $data['total_marks']) * 100, 2);
+    $grade = $this->calculateGrade($percentage);
+    $result_status = $percentage >= 40 ? 'Pass' : 'Fail';
+
+    // Check if result already exists
+    $check_stmt = $this->conn->prepare("
+            SELECT id FROM results 
+            WHERE student_id = :student_id AND exam_id = :exam_id AND subject_id = :subject_id
+        ");
+    $check_stmt->bindValue(':student_id', $data['student_id']);
+    $check_stmt->bindValue(':exam_id', $data['exam_id']);
+    $check_stmt->bindValue(':subject_id', $data['subject_id']);
+    $check_stmt->execute();
+
+    if ($check_stmt->rowCount() > 0) {
+      // Update existing result
+      $query = "
+                UPDATE results 
+                SET marks_obtained = :marks_obtained, 
+                    total_marks = :total_marks,
+                    percentage = :percentage,
+                    grade = :grade,
+                    result = :result
+                WHERE student_id = :student_id AND exam_id = :exam_id AND subject_id = :subject_id
+            ";
+    } else {
+      // Insert new result
+      $query = "
+                INSERT INTO results (student_id, exam_id, subject_id, marks_obtained, total_marks, percentage, grade, result)
+                VALUES (:student_id, :exam_id, :subject_id, :marks_obtained, :total_marks, :percentage, :grade, :result)
+            ";
+    }
+
+    try {
+      $stmt = $this->conn->prepare($query);
+      $stmt->bindValue(':student_id', $data['student_id']);
+      $stmt->bindValue(':exam_id', $data['exam_id']);
+      $stmt->bindValue(':subject_id', $data['subject_id']);
+      $stmt->bindValue(':marks_obtained', $data['marks_obtained']);
+      $stmt->bindValue(':total_marks', $data['total_marks']);
+      $stmt->bindValue(':percentage', $percentage);
+      $stmt->bindValue(':grade', $grade);
+      $stmt->bindValue(':result', $result_status);
+
+      if ($stmt->execute()) {
+        return [
+          'success' => true,
+          'message' => 'Result saved successfully',
+          'percentage' => $percentage,
+          'grade' => $grade,
+          'result' => $result_status
+        ];
+      } else {
+        return ['success' => false, 'message' => 'Failed to save result'];
+      }
+    } catch (Exception $e) {
+      return ['success' => false, 'message' => 'Error: ' . $e->getMessage()];
+    }
+  }
+
+  /**
+   * Delete a result
+   */
+  public function deleteResult($result_id)
+  {
+    $query = "DELETE FROM results WHERE id = :id";
+
+    try {
+      $stmt = $this->conn->prepare($query);
+      $stmt->bindValue(':id', $result_id);
+
+      if ($stmt->execute()) {
+        return ['success' => true, 'message' => 'Result deleted successfully'];
+      } else {
+        return ['success' => false, 'message' => 'Failed to delete result'];
+      }
+    } catch (Exception $e) {
+      return ['success' => false, 'message' => 'Error: ' . $e->getMessage()];
+    }
+  }
+
+  /**
+   * Calculate grade based on percentage
+   */
+  public function calculateGrade($percentage)
   {
     if ($percentage >= 90)
       return 'A+';
     if ($percentage >= 80)
       return 'A';
     if ($percentage >= 70)
-      return 'B';
+      return 'B+';
     if ($percentage >= 60)
-      return 'C';
+      return 'B';
     if ($percentage >= 50)
+      return 'C+';
+    if ($percentage >= 40)
+      return 'C';
+    if ($percentage >= 33)
       return 'D';
     return 'F';
   }
 
-  // Calculate result based on percentage
-  private function calculateResult($percentage)
+  /**
+   * Get result statistics
+   */
+  public function getResultStats($teacher_id, $filters = [])
   {
-    return ($percentage >= 50) ? 'Pass' : 'Fail';
+    $query = "
+            SELECT 
+                COUNT(*) as total_students,
+                SUM(CASE WHEN r.result = 'Pass' THEN 1 ELSE 0 END) as passed,
+                SUM(CASE WHEN r.result = 'Fail' THEN 1 ELSE 0 END) as failed,
+                AVG(r.percentage) as average_percentage,
+                MAX(r.percentage) as highest_percentage,
+                MIN(r.percentage) as lowest_percentage
+            FROM results r
+            LEFT JOIN students s ON r.student_id = s.id
+            LEFT JOIN subjects sub ON r.subject_id = sub.id
+            LEFT JOIN classes c ON s.class_id = c.id
+            LEFT JOIN exams e ON r.exam_id = e.id
+            WHERE 1=1
+        ";
+
+    $params = [];
+
+    // Teacher filter
+    $query .= " AND (sub.teacher_id = :teacher_id OR c.teacher_id = :teacher_id)";
+    $params[':teacher_id'] = $teacher_id;
+
+    // Class filter
+    if (!empty($filters['class_id'])) {
+      $query .= " AND c.id = :class_id";
+      $params[':class_id'] = $filters['class_id'];
+    }
+
+    // Subject filter
+    if (!empty($filters['subject_id'])) {
+      $query .= " AND sub.id = :subject_id";
+      $params[':subject_id'] = $filters['subject_id'];
+    }
+
+    // Exam filter
+    if (!empty($filters['exam_id'])) {
+      $query .= " AND e.id = :exam_id";
+      $params[':exam_id'] = $filters['exam_id'];
+    }
+
+    $stmt = $this->conn->prepare($query);
+    foreach ($params as $key => $value) {
+      $stmt->bindValue($key, $value);
+    }
+    $stmt->execute();
+
+    $result = $stmt->fetch();
+    return [
+      'total_students' => (int) ($result['total_students'] ?? 0),
+      'passed' => (int) ($result['passed'] ?? 0),
+      'failed' => (int) ($result['failed'] ?? 0),
+      'average_percentage' => round($result['average_percentage'] ?? 0, 2),
+      'highest_percentage' => round($result['highest_percentage'] ?? 0, 2),
+      'lowest_percentage' => round($result['lowest_percentage'] ?? 0, 2)
+    ];
   }
 
-  // Insert result
-  public function insert()
+  /**
+   * Get grade distribution
+   */
+  public function getGradeDistribution($teacher_id, $filters = [])
   {
-    try {
-      // Validate foreign keys
-      if (!$this->validateForeignKeys()) {
-        return false;
-      }
+    $query = "
+            SELECT 
+                r.grade,
+                COUNT(*) as count
+            FROM results r
+            LEFT JOIN students s ON r.student_id = s.id
+            LEFT JOIN subjects sub ON r.subject_id = sub.id
+            LEFT JOIN classes c ON s.class_id = c.id
+            WHERE (sub.teacher_id = :teacher_id OR c.teacher_id = :teacher_id)
+        ";
 
-      // Check if result already exists for this student, exam, and subject
-      $checkQuery = "SELECT id FROM results WHERE student_id = ? AND exam_id = ? AND subject_id = ?";
-      $checkStmt = $this->conn->prepare($checkQuery);
-      $checkStmt->execute([$this->student_id, $this->exam_id, $this->subject_id]);
+    $params = [':teacher_id' => $teacher_id];
 
-      if ($checkStmt->rowCount() > 0) {
-        error_log("Result already exists for student {$this->student_id}, exam {$this->exam_id}, subject {$this->subject_id}");
-        return false;
-      }
-
-      // Calculate percentage, grade, and result if not provided
-      if ($this->percentage === null || $this->percentage === '') {
-        $this->percentage = ($this->marks_obtained / $this->total_marks) * 100;
-        $this->percentage = round($this->percentage, 2);
-      }
-
-      if (empty($this->grade)) {
-        $this->grade = $this->calculateGrade($this->percentage);
-      }
-
-      if (empty($this->result)) {
-        $this->result = $this->calculateResult($this->percentage);
-      }
-
-      $insert_query = "INSERT INTO results (student_id, exam_id, subject_id, marks_obtained, total_marks, percentage, grade, result, created_at) 
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
-
-      $stmt = $this->conn->prepare($insert_query);
-
-      if (!$stmt) {
-        error_log("Prepare failed: " . print_r($this->conn->errorInfo(), true));
-        return false;
-      }
-
-      $result = $stmt->execute([
-        $this->student_id,
-        $this->exam_id,
-        $this->subject_id,
-        $this->marks_obtained,
-        $this->total_marks,
-        $this->percentage,
-        $this->grade,
-        $this->result,
-        $this->created_at
-      ]);
-
-      if (!$result) {
-        error_log("Execute failed: " . print_r($stmt->errorInfo(), true));
-        return false;
-      }
-
-      return $this->conn->lastInsertId();
-    } catch (PDOException $e) {
-      error_log("Insert result error: " . $e->getMessage());
-      return false;
+    if (!empty($filters['class_id'])) {
+      $query .= " AND c.id = :class_id";
+      $params[':class_id'] = $filters['class_id'];
     }
+
+    if (!empty($filters['subject_id'])) {
+      $query .= " AND sub.id = :subject_id";
+      $params[':subject_id'] = $filters['subject_id'];
+    }
+
+    if (!empty($filters['exam_id'])) {
+      $query .= " AND r.exam_id = :exam_id";
+      $params[':exam_id'] = $filters['exam_id'];
+    }
+
+    $query .= " GROUP BY r.grade ORDER BY FIELD(r.grade, 'A+', 'A', 'B+', 'B', 'C+', 'C', 'D', 'F')";
+
+    $stmt = $this->conn->prepare($query);
+    foreach ($params as $key => $value) {
+      $stmt->bindValue($key, $value);
+    }
+    $stmt->execute();
+
+    return $stmt->fetchAll();
   }
 
-  // Update result
-  public function update()
+  /**
+   * Get top performers
+   */
+  public function getTopPerformers($teacher_id, $limit = 10, $filters = [])
   {
-    try {
-      // Validate foreign keys
-      if (!$this->validateForeignKeys()) {
-        return false;
-      }
+    $query = "
+            SELECT 
+                s.first_name,
+                s.last_name,
+                s.student_uid,
+                r.marks_obtained,
+                r.total_marks,
+                r.percentage,
+                r.grade,
+                sub.subject_title,
+                e.exam_title
+            FROM results r
+            LEFT JOIN students s ON r.student_id = s.id
+            LEFT JOIN subjects sub ON r.subject_id = sub.id
+            LEFT JOIN classes c ON s.class_id = c.id
+            LEFT JOIN exams e ON r.exam_id = e.id
+            WHERE (sub.teacher_id = :teacher_id OR c.teacher_id = :teacher_id)
+                AND r.result = 'Pass'
+        ";
 
-      // Check if result exists
-      $checkExists = $this->conn->prepare("SELECT id FROM results WHERE id = ?");
-      $checkExists->execute([$this->id]);
-      if (!$checkExists->fetch()) {
-        error_log("Result ID {$this->id} not found");
-        return false;
-      }
+    $params = [':teacher_id' => $teacher_id];
 
-      // Calculate percentage, grade, and result if not provided
-      if ($this->percentage === null || $this->percentage === '') {
-        $this->percentage = ($this->marks_obtained / $this->total_marks) * 100;
-        $this->percentage = round($this->percentage, 2);
-      }
-
-      if (empty($this->grade)) {
-        $this->grade = $this->calculateGrade($this->percentage);
-      }
-
-      if (empty($this->result)) {
-        $this->result = $this->calculateResult($this->percentage);
-      }
-
-      $update_query = "UPDATE results SET 
-                            student_id = ?, 
-                            exam_id = ?, 
-                            subject_id = ?, 
-                            marks_obtained = ?, 
-                            total_marks = ?, 
-                            percentage = ?, 
-                            grade = ?, 
-                            result = ? 
-                            WHERE id = ?";
-
-      $stmt = $this->conn->prepare($update_query);
-
-      if (!$stmt) {
-        error_log("Prepare failed: " . print_r($this->conn->errorInfo(), true));
-        return false;
-      }
-
-      $result = $stmt->execute([
-        $this->student_id,
-        $this->exam_id,
-        $this->subject_id,
-        $this->marks_obtained,
-        $this->total_marks,
-        $this->percentage,
-        $this->grade,
-        $this->result,
-        $this->id
-      ]);
-
-      if (!$result) {
-        error_log("Execute failed: " . print_r($stmt->errorInfo(), true));
-        return false;
-      }
-
-      return $stmt->rowCount() > 0;
-    } catch (PDOException $e) {
-      error_log("Update result error: " . $e->getMessage());
-      return false;
+    if (!empty($filters['class_id'])) {
+      $query .= " AND c.id = :class_id";
+      $params[':class_id'] = $filters['class_id'];
     }
+
+    if (!empty($filters['subject_id'])) {
+      $query .= " AND sub.id = :subject_id";
+      $params[':subject_id'] = $filters['subject_id'];
+    }
+
+    if (!empty($filters['exam_id'])) {
+      $query .= " AND r.exam_id = :exam_id";
+      $params[':exam_id'] = $filters['exam_id'];
+    }
+
+    $query .= " ORDER BY r.percentage DESC LIMIT :limit";
+
+    $stmt = $this->conn->prepare($query);
+    foreach ($params as $key => $value) {
+      $stmt->bindValue($key, $value);
+    }
+    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+    $stmt->execute();
+
+    return $stmt->fetchAll();
   }
 
-  // Delete result
-  public function delete($id)
+  /**
+   * Get student result summary
+   */
+  public function getStudentResultSummary($student_id)
   {
-    try {
-      $delete_query = "DELETE FROM results WHERE id = ?";
-      $stmt = $this->conn->prepare($delete_query);
+    $query = "
+            SELECT 
+                COUNT(*) as total_exams,
+                SUM(CASE WHEN result = 'Pass' THEN 1 ELSE 0 END) as passed,
+                SUM(CASE WHEN result = 'Fail' THEN 1 ELSE 0 END) as failed,
+                AVG(percentage) as average_percentage,
+                MAX(percentage) as highest_percentage,
+                MIN(percentage) as lowest_percentage
+            FROM results
+            WHERE student_id = :student_id
+        ";
 
-      if (!$stmt) {
-        error_log("Prepare failed: " . print_r($this->conn->errorInfo(), true));
-        return false;
-      }
+    $stmt = $this->conn->prepare($query);
+    $stmt->bindValue(':student_id', $student_id);
+    $stmt->execute();
 
-      $result = $stmt->execute([$id]);
-      return $result && $stmt->rowCount() > 0;
-    } catch (PDOException $e) {
-      error_log("Delete result error: " . $e->getMessage());
-      return false;
-    }
+    return $stmt->fetch();
   }
 
-  // Validate foreign keys
-  private function validateForeignKeys()
+  /**
+   * Get all exams with results for dropdown
+   */
+  public function getExamsWithResults($teacher_id)
   {
-    try {
-      // Check student exists
-      $checkStudent = $this->conn->prepare("SELECT id FROM students WHERE id = ? AND status = 'Active'");
-      $checkStudent->execute([$this->student_id]);
-      if (!$checkStudent->fetch()) {
-        error_log("Student ID {$this->student_id} not found or inactive");
-        return false;
-      }
+    $query = "
+            SELECT DISTINCT e.id, e.exam_title, e.exam_date
+            FROM exams e
+            LEFT JOIN results r ON e.id = r.exam_id
+            LEFT JOIN subjects s ON e.subject_id = s.id
+            LEFT JOIN classes c ON e.class_id = c.id
+            WHERE (s.teacher_id = :teacher_id OR c.teacher_id = :teacher_id)
+            ORDER BY e.exam_date DESC
+        ";
 
-      // Check exam exists
-      $checkExam = $this->conn->prepare("SELECT id FROM exams WHERE id = ?");
-      $checkExam->execute([$this->exam_id]);
-      if (!$checkExam->fetch()) {
-        error_log("Exam ID {$this->exam_id} not found");
-        return false;
-      }
+    $stmt = $this->conn->prepare($query);
+    $stmt->bindValue(':teacher_id', $teacher_id);
+    $stmt->execute();
 
-      // Check subject exists
-      $checkSubject = $this->conn->prepare("SELECT id FROM subjects WHERE id = ? AND status = 'Active'");
-      $checkSubject->execute([$this->subject_id]);
-      if (!$checkSubject->fetch()) {
-        error_log("Subject ID {$this->subject_id} not found or inactive");
-        return false;
-      }
-
-      return true;
-    } catch (PDOException $e) {
-      error_log("Validation error: " . $e->getMessage());
-      return false;
-    }
-  }
-
-  // Get results by student ID
-  public function getResultsByStudentId($student_id)
-  {
-    try {
-      $query = "SELECT r.*, 
-                      s.subject_title,
-                      e.exam_title,
-                      CONCAT(st.first_name, ' ', st.last_name) as student_name
-                      FROM results r
-                      LEFT JOIN subjects s ON r.subject_id = s.id
-                      LEFT JOIN exams e ON r.exam_id = e.id
-                      LEFT JOIN students st ON r.student_id = st.id
-                      WHERE r.student_id = ?
-                      ORDER BY r.created_at DESC";
-
-      $stmt = $this->conn->prepare($query);
-      $stmt->execute([$student_id]);
-      return $stmt->fetchAll(PDO::FETCH_ASSOC);
-    } catch (PDOException $e) {
-      error_log("Get results by student error: " . $e->getMessage());
-      return [];
-    }
-  }
-
-  // Get result by ID
-  public function getResultById($id)
-  {
-    try {
-      $query = "SELECT r.*, 
-                      s.subject_title,
-                      e.exam_title,
-                      CONCAT(st.first_name, ' ', st.last_name) as student_name,
-                      st.student_uid
-                      FROM results r
-                      LEFT JOIN subjects s ON r.subject_id = s.id
-                      LEFT JOIN exams e ON r.exam_id = e.id
-                      LEFT JOIN students st ON r.student_id = st.id
-                      WHERE r.id = ?";
-
-      $stmt = $this->conn->prepare($query);
-      $stmt->execute([$id]);
-      return $stmt->fetch(PDO::FETCH_ASSOC);
-    } catch (PDOException $e) {
-      error_log("Get result by ID error: " . $e->getMessage());
-      return null;
-    }
-  }
-
-  // Get all results with joins
-  public function getAllResults()
-  {
-    try {
-      $query = "SELECT r.*, 
-                      s.subject_title,
-                      s.subject_code,
-                      e.exam_title,
-                      e.exam_date,
-                      CONCAT(st.first_name, ' ', st.last_name) as student_name,
-                      st.student_uid,
-                      c.name as class_name,
-                      c.grade as class_grade
-                      FROM results r
-                      LEFT JOIN subjects s ON r.subject_id = s.id
-                      LEFT JOIN exams e ON r.exam_id = e.id
-                      LEFT JOIN students st ON r.student_id = st.id
-                      LEFT JOIN classes c ON st.class_id = c.id
-                      ORDER BY r.created_at DESC";
-
-      $stmt = $this->conn->prepare($query);
-      $stmt->execute();
-      return $stmt->fetchAll(PDO::FETCH_ASSOC);
-    } catch (PDOException $e) {
-      error_log("Get all results error: " . $e->getMessage());
-      return [];
-    }
-  }
-
-  // Get results by exam
-  public function getResultsByExam($exam_id)
-  {
-    try {
-      $query = "SELECT r.*, 
-                      s.subject_title,
-                      CONCAT(st.first_name, ' ', st.last_name) as student_name,
-                      st.student_uid
-                      FROM results r
-                      LEFT JOIN subjects s ON r.subject_id = s.id
-                      LEFT JOIN students st ON r.student_id = st.id
-                      WHERE r.exam_id = ?
-                      ORDER BY r.marks_obtained DESC";
-
-      $stmt = $this->conn->prepare($query);
-      $stmt->execute([$exam_id]);
-      return $stmt->fetchAll(PDO::FETCH_ASSOC);
-    } catch (PDOException $e) {
-      error_log("Get results by exam error: " . $e->getMessage());
-      return [];
-    }
-  }
-
-  // Get results by subject
-  public function getResultsBySubject($subject_id)
-  {
-    try {
-      $query = "SELECT r.*, 
-                      CONCAT(st.first_name, ' ', st.last_name) as student_name,
-                      e.exam_title
-                      FROM results r
-                      LEFT JOIN students st ON r.student_id = st.id
-                      LEFT JOIN exams e ON r.exam_id = e.id
-                      WHERE r.subject_id = ?
-                      ORDER BY r.marks_obtained DESC";
-
-      $stmt = $this->conn->prepare($query);
-      $stmt->execute([$subject_id]);
-      return $stmt->fetchAll(PDO::FETCH_ASSOC);
-    } catch (PDOException $e) {
-      error_log("Get results by subject error: " . $e->getMessage());
-      return [];
-    }
-  }
-
-  // Count total results
-  public function countResults()
-  {
-    try {
-      $query = "SELECT COUNT(*) as total FROM results";
-      $stmt = $this->conn->prepare($query);
-      $stmt->execute();
-      $result = $stmt->fetch(PDO::FETCH_ASSOC);
-      return $result['total'] ?? 0;
-    } catch (PDOException $e) {
-      error_log("Count results error: " . $e->getMessage());
-      return 0;
-    }
-  }
-
-  // Get result statistics
-  public function getResultStats()
-  {
-    try {
-      $query = "SELECT 
-                      COUNT(*) as total,
-                      SUM(CASE WHEN result = 'Pass' THEN 1 ELSE 0 END) as passed,
-                      SUM(CASE WHEN result = 'Fail' THEN 1 ELSE 0 END) as failed,
-                      AVG(percentage) as avg_percentage,
-                      MAX(percentage) as max_percentage,
-                      MIN(percentage) as min_percentage
-                      FROM results";
-
-      $stmt = $this->conn->prepare($query);
-      $stmt->execute();
-      return $stmt->fetch(PDO::FETCH_ASSOC);
-    } catch (PDOException $e) {
-      error_log("Get result stats error: " . $e->getMessage());
-      return ['total' => 0, 'passed' => 0, 'failed' => 0, 'avg_percentage' => 0, 'max_percentage' => 0, 'min_percentage' => 0];
-    }
-  }
-
-  // Get students without results for an exam
-  public function getStudentsWithoutResults($exam_id, $class_id = null)
-  {
-    try {
-      $query = "SELECT s.id, CONCAT(s.first_name, ' ', s.last_name) as student_name, s.student_uid
-                      FROM students s
-                      WHERE s.status = 'Active'";
-
-      $params = [];
-
-      if ($class_id) {
-        $query .= " AND s.class_id = ?";
-        $params[] = $class_id;
-      }
-
-      $query .= " AND s.id NOT IN (
-                          SELECT student_id FROM results WHERE exam_id = ?
-                      ) ORDER BY s.first_name";
-
-      $params[] = $exam_id;
-
-      $stmt = $this->conn->prepare($query);
-      $stmt->execute($params);
-      return $stmt->fetchAll(PDO::FETCH_ASSOC);
-    } catch (PDOException $e) {
-      error_log("Get students without results error: " . $e->getMessage());
-      return [];
-    }
+    return $stmt->fetchAll();
   }
 }
+
+// Usage example:
+/*
+$resultProcess = new ResultsProcess($conn);
+
+// Get results with filters
+$results = $resultProcess->getResults($teacher_id, [
+    'class_id' => 1,
+    'subject_id' => 1,
+    'exam_id' => 1
+]);
+
+// Get result stats
+$stats = $resultProcess->getResultStats($teacher_id, [
+    'class_id' => 1,
+    'subject_id' => 1
+]);
+
+// Save a new result
+$result = $resultProcess->saveResult([
+    'student_id' => 1,
+    'exam_id' => 1,
+    'subject_id' => 1,
+    'marks_obtained' => 85,
+    'total_marks' => 100
+]);
+
+// Get top performers
+$top = $resultProcess->getTopPerformers($teacher_id, 10, ['class_id' => 1]);
+
+// Get grade distribution
+$grades = $resultProcess->getGradeDistribution($teacher_id, ['class_id' => 1]);
+*/
 ?>

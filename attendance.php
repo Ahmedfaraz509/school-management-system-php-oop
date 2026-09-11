@@ -1,1989 +1,994 @@
 <?php
-// attendance.php - Student Attendance Page
+// attendance.php
 require_once '../database/connect.php';
 
 session_start();
+$teacher_id = $_SESSION['teacher_id'] ?? 10; // Default teacher ID for demo
 
-// Get student ID from session or use default
-$student_id = $_SESSION['student_id'] ?? 4;
+// Get filter parameters
+$search_date = $_GET['date'] ?? date('Y-m-d');
+$class_filter = $_GET['class'] ?? '';
+$student_search = $_GET['search'] ?? '';
 
-// Check if student exists
-$check_stmt = $conn->prepare("SELECT id FROM students WHERE id = :id");
-$check_stmt->bindValue(':id', $student_id);
-$check_stmt->execute();
-$student_exists = $check_stmt->fetch();
-
-if (!$student_exists) {
-  $first_stmt = $conn->query("SELECT id FROM students LIMIT 1");
-  $first = $first_stmt->fetch();
-  if ($first) {
-    $student_id = $first['id'];
-    $_SESSION['student_id'] = $student_id;
-  } else {
-    die("No students found in the database.");
-  }
+// Process form submission for marking attendance
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['mark_attendance'])) {
+    $attendance_date = $_POST['attendance_date'];
+    $class_id = $_POST['class_id'];
+    $statuses = $_POST['status'] ?? [];
+    $remarks = $_POST['remarks'] ?? [];
+    
+    try {
+        $conn->beginTransaction();
+        
+        // Get all students in this class
+        $student_stmt = $conn->prepare("
+            SELECT id FROM students 
+            WHERE class_id = :class_id AND status = 'Active'
+        ");
+        $student_stmt->bindValue(':class_id', $class_id);
+        $student_stmt->execute();
+        $students = $student_stmt->fetchAll();
+        
+        foreach ($students as $student) {
+            $student_id = $student['id'];
+            $status = $statuses[$student_id] ?? 'Absent';
+            $remark = $remarks[$student_id] ?? '';
+            
+            // Check if attendance already exists
+            $check_stmt = $conn->prepare("
+                SELECT id FROM attendance 
+                WHERE student_id = :student_id AND attendance_date = :date
+            ");
+            $check_stmt->bindValue(':student_id', $student_id);
+            $check_stmt->bindValue(':date', $attendance_date);
+            $check_stmt->execute();
+            
+            if ($check_stmt->rowCount() > 0) {
+                // Update existing record
+                $update_stmt = $conn->prepare("
+                    UPDATE attendance 
+                    SET status = :status, remarks = :remarks, check_in_time = NOW()
+                    WHERE student_id = :student_id AND attendance_date = :date
+                ");
+                $update_stmt->bindValue(':status', $status);
+                $update_stmt->bindValue(':remarks', $remark);
+                $update_stmt->bindValue(':student_id', $student_id);
+                $update_stmt->bindValue(':date', $attendance_date);
+                $update_stmt->execute();
+            } else {
+                // Insert new record
+                $insert_stmt = $conn->prepare("
+                    INSERT INTO attendance (student_id, class_id, attendance_date, check_in_time, status, remarks)
+                    VALUES (:student_id, :class_id, :date, NOW(), :status, :remarks)
+                ");
+                $insert_stmt->bindValue(':student_id', $student_id);
+                $insert_stmt->bindValue(':class_id', $class_id);
+                $insert_stmt->bindValue(':date', $attendance_date);
+                $insert_stmt->bindValue(':status', $status);
+                $insert_stmt->bindValue(':remarks', $remark);
+                $insert_stmt->execute();
+            }
+        }
+        
+        $conn->commit();
+        $success_message = "Attendance marked successfully for " . date('d M Y', strtotime($attendance_date));
+        
+        // Refresh the page to show updated data
+        header("Location: attendance.php?date=" . $attendance_date . "&class=" . $class_id);
+        exit();
+        
+    } catch (Exception $e) {
+        $conn->rollBack();
+        $error_message = "Error marking attendance: " . $e->getMessage();
+    }
 }
 
-// Get student info
-$student_stmt = $conn->prepare("
+// Get classes for the teacher
+$class_stmt = $conn->prepare("
+    SELECT DISTINCT c.id, c.name, c.grade, c.room_no
+    FROM classes c
+    WHERE c.teacher_id = :teacher_id AND c.status = 'active'
+    ORDER BY c.name
+");
+$class_stmt->bindValue(':teacher_id', $teacher_id);
+$class_stmt->execute();
+$classes = $class_stmt->fetchAll();
+
+// Get students for the selected class (for marking attendance)
+$selected_class_students = [];
+if ($class_filter && $class_filter != '') {
+    $student_stmt = $conn->prepare("
+        SELECT s.id, s.first_name, s.last_name, s.student_uid
+        FROM students s
+        WHERE s.class_id = :class_id AND s.status = 'Active'
+        ORDER BY s.first_name, s.last_name
+    ");
+    $student_stmt->bindValue(':class_id', $class_filter);
+    $student_stmt->execute();
+    $selected_class_students = $student_stmt->fetchAll();
+    
+    // Get existing attendance for these students on the selected date
+    if (!empty($selected_class_students)) {
+        $student_ids = array_column($selected_class_students, 'id');
+        $placeholders = implode(',', array_fill(0, count($student_ids), '?'));
+        
+        $attendance_stmt = $conn->prepare("
+            SELECT student_id, status, remarks, check_in_time
+            FROM attendance
+            WHERE student_id IN ($placeholders) AND attendance_date = ?
+        ");
+        $params = array_merge($student_ids, [$search_date]);
+        $attendance_stmt->execute($params);
+        $existing_attendance = [];
+        while ($row = $attendance_stmt->fetch()) {
+            $existing_attendance[$row['student_id']] = $row;
+        }
+        
+        // Merge attendance data with students
+        foreach ($selected_class_students as &$student) {
+            if (isset($existing_attendance[$student['id']])) {
+                $student['attendance_status'] = $existing_attendance[$student['id']]['status'];
+                $student['attendance_remarks'] = $existing_attendance[$student['id']]['remarks'];
+                $student['check_in_time'] = $existing_attendance[$student['id']]['check_in_time'];
+            } else {
+                $student['attendance_status'] = 'Not Marked';
+                $student['attendance_remarks'] = '';
+                $student['check_in_time'] = null;
+            }
+        }
+    }
+}
+
+// Build main attendance query with filters
+$query = "
     SELECT 
-        s.id,
+        a.id,
+        a.student_id,
+        a.attendance_date,
+        a.status,
+        a.remarks,
+        a.check_in_time,
         s.first_name,
         s.last_name,
         s.student_uid,
-        s.class_id,
+        c.id as class_id,
         c.name as class_name,
         c.grade as class_grade
-    FROM students s
+    FROM attendance a
+    LEFT JOIN students s ON a.student_id = s.id
     LEFT JOIN classes c ON s.class_id = c.id
-    WHERE s.id = :student_id
-");
-$student_stmt->bindValue(':student_id', $student_id);
-$student_stmt->execute();
-$student = $student_stmt->fetch();
+    WHERE 1=1
+";
 
-if (!$student) {
-  $fallback_stmt = $conn->query("
-        SELECT 
-            s.id,
-            s.first_name,
-            s.last_name,
-            s.student_uid,
-            s.class_id,
-            c.name as class_name,
-            c.grade as class_grade
-        FROM students s
-        LEFT JOIN classes c ON s.class_id = c.id
-        LIMIT 1
-    ");
-  $student = $fallback_stmt->fetch();
-  if ($student) {
-    $student_id = $student['id'];
-    $_SESSION['student_id'] = $student_id;
-  }
+$params = [];
+
+// Filter by teacher's classes
+$query .= " AND c.teacher_id = :teacher_id";
+$params[':teacher_id'] = $teacher_id;
+
+// Date filter
+if (!empty($search_date)) {
+    $query .= " AND a.attendance_date = :date";
+    $params[':date'] = $search_date;
 }
 
-$student_name = isset($student['first_name']) ? ($student['first_name'] . ' ' . ($student['last_name'] ?? '')) : 'Student';
-$student_name = trim($student_name) ?: 'Student';
-$student_initials = isset($student['first_name']) ? strtoupper(substr($student['first_name'], 0, 1) . substr($student['last_name'] ?? '', 0, 1)) : 'ST';
-$student_initials = $student_initials ?: 'ST';
-
-$class_id = $student['class_id'] ?? 0;
-$class_name = $student['class_name'] ?? 'Not Assigned';
-
-// Get attendance statistics
-$attendance_stats = [
-  'total_classes' => 0,
-  'present' => 0,
-  'absent' => 0,
-  'late' => 0,
-  'percentage' => 0
-];
-
-$stats_stmt = $conn->prepare("
-    SELECT 
-        COUNT(*) as total,
-        SUM(CASE WHEN status = 'Present' THEN 1 ELSE 0 END) as present,
-        SUM(CASE WHEN status = 'Absent' THEN 1 ELSE 0 END) as absent,
-        SUM(CASE WHEN status = 'Late' THEN 1 ELSE 0 END) as late
-    FROM attendance
-    WHERE student_id = :student_id
-");
-$stats_stmt->bindValue(':student_id', $student_id);
-$stats_stmt->execute();
-$stats_data = $stats_stmt->fetch();
-
-if ($stats_data) {
-  $attendance_stats['total_classes'] = $stats_data['total'] ?? 0;
-  $attendance_stats['present'] = $stats_data['present'] ?? 0;
-  $attendance_stats['absent'] = $stats_data['absent'] ?? 0;
-  $attendance_stats['late'] = $stats_data['late'] ?? 0;
-  $attendance_stats['percentage'] = $attendance_stats['total_classes'] > 0 ?
-    round(($attendance_stats['present'] / $attendance_stats['total_classes']) * 100) : 0;
+// Class filter
+if (!empty($class_filter)) {
+    $query .= " AND c.id = :class_id";
+    $params[':class_id'] = $class_filter;
 }
 
-// Get class-wise attendance
-$subject_attendance = [];
-$subject_stmt = $conn->prepare("
-    SELECT 
-        c.name as subject_title,
-        COUNT(a.id) as total_classes,
-        SUM(CASE WHEN a.status = 'Present' THEN 1 ELSE 0 END) as present,
-        SUM(CASE WHEN a.status = 'Absent' THEN 1 ELSE 0 END) as absent,
-        SUM(CASE WHEN a.status = 'Late' THEN 1 ELSE 0 END) as late
-    FROM attendance a
-    LEFT JOIN classes c ON a.class_id = c.id
-    WHERE a.student_id = :student_id
-    GROUP BY a.class_id
-");
-$subject_stmt->bindValue(':student_id', $student_id);
-$subject_stmt->execute();
-$subject_attendance = $subject_stmt->fetchAll();
-
-if (empty($subject_attendance) && $attendance_stats['total_classes'] > 0) {
-  $subject_attendance[] = [
-    'subject_title' => 'All Classes',
-    'total_classes' => $attendance_stats['total_classes'],
-    'present' => $attendance_stats['present'],
-    'absent' => $attendance_stats['absent'],
-    'late' => $attendance_stats['late']
-  ];
+// Student search
+if (!empty($student_search)) {
+    $query .= " AND (s.first_name LIKE :search OR s.last_name LIKE :search OR s.student_uid LIKE :search)";
+    $params[':search'] = '%' . $student_search . '%';
 }
 
-// Get recent attendance records
-$recent_stmt = $conn->prepare("
-    SELECT 
-        a.attendance_date,
-        c.name as subject_title,
-        a.status,
-        a.remarks
-    FROM attendance a
-    LEFT JOIN classes c ON a.class_id = c.id
-    WHERE a.student_id = :student_id
-    ORDER BY a.attendance_date DESC
-    LIMIT 12
-");
-$recent_stmt->bindValue(':student_id', $student_id);
-$recent_stmt->execute();
-$recent_records = $recent_stmt->fetchAll();
+$query .= " ORDER BY a.attendance_date DESC, s.first_name ASC";
 
-// Get monthly trend
-$monthly_trend = [];
-$trend_stmt = $conn->prepare("
-    SELECT 
-        MONTH(attendance_date) as month,
-        MONTHNAME(attendance_date) as month_name,
-        COUNT(*) as total,
-        SUM(CASE WHEN status = 'Present' THEN 1 ELSE 0 END) as present
-    FROM attendance
-    WHERE student_id = :student_id
-    GROUP BY MONTH(attendance_date)
-    ORDER BY MONTH(attendance_date) ASC
-");
-$trend_stmt->bindValue(':student_id', $student_id);
-$trend_stmt->execute();
-$monthly_trend = $trend_stmt->fetchAll();
-
-$monthly_percentages = [];
-foreach ($monthly_trend as $month) {
-  $pct = $month['total'] > 0 ? round(($month['present'] / $month['total']) * 100) : 0;
-  $monthly_percentages[] = [
-    'month' => $month['month_name'] ?? 'Unknown',
-    'percentage' => $pct,
-    'total' => $month['total']
-  ];
+$stmt = $conn->prepare($query);
+foreach ($params as $key => $value) {
+    $stmt->bindValue($key, $value);
 }
+$stmt->execute();
+$attendance_records = $stmt->fetchAll();
 
-// Get leave records
-$leave_stmt = $conn->prepare("
-    SELECT 
-        attendance_date,
-        remarks,
-        status
-    FROM attendance
-    WHERE student_id = :student_id 
-        AND (status = 'Absent' OR status = 'Late')
-        AND remarks IS NOT NULL AND remarks != ''
-    ORDER BY attendance_date DESC
-    LIMIT 4
-");
-$leave_stmt->bindValue(':student_id', $student_id);
-$leave_stmt->execute();
-$leave_records = $leave_stmt->fetchAll();
+// Calculate statistics from the filtered records
+$total_present = 0;
+$total_absent = 0;
+$total_late = 0;
+$total_records = count($attendance_records);
 
-// Get unread message count
-$unread_stmt = $conn->prepare("
-    SELECT COUNT(*) as count
-    FROM messages
-    WHERE recipient_type = 'Student' AND recipient_id = :student_id AND is_read = 0
-");
-$unread_stmt->bindValue(':student_id', $student_id);
-$unread_stmt->execute();
-$unread_count = $unread_stmt->fetch()['count'] ?? 0;
-
-// Get notice count
-$notice_stmt = $conn->prepare("SELECT COUNT(*) as count FROM notices");
-$notice_stmt->execute();
-$notice_count = $notice_stmt->fetch()['count'] ?? 0;
-
-// Get assignment count
-$assignment_count = 0;
-if ($class_id > 0) {
-  $assignment_stmt = $conn->prepare("
-        SELECT COUNT(*) as count 
-        FROM assignments a
-        WHERE a.class_id = :class_id AND a.status = 'active' AND a.due_date >= CURDATE()
-    ");
-  $assignment_stmt->bindValue(':class_id', $class_id);
-  $assignment_stmt->execute();
-  $assignment_count = $assignment_stmt->fetch()['count'] ?? 0;
-}
-
-// Subject colors for chips
-$subject_colors = [
-  'Mathematics' => 's-math',
-  'Math' => 's-math',
-  'Physics' => 's-phy',
-  'Chemistry' => 's-chem',
-  'Computer' => 's-cs',
-  'Computer Science' => 's-cs',
-  'English' => 's-eng',
-  'Urdu' => 's-urdu',
-  'Biology' => 's-bio',
-  'default' => 's-default'
-];
-
-function getSubjectColor($subject_title)
-{
-  global $subject_colors;
-  if (!$subject_title)
-    return $subject_colors['default'];
-  foreach ($subject_colors as $key => $color) {
-    if (stripos($subject_title, $key) !== false) {
-      return $color;
+foreach ($attendance_records as $record) {
+    switch ($record['status']) {
+        case 'Present':
+            $total_present++;
+            break;
+        case 'Absent':
+            $total_absent++;
+            break;
+        case 'Late':
+            $total_late++;
+            break;
     }
-  }
-  return $subject_colors['default'];
 }
 
-function getSubjectIcon($subject_title)
-{
-  $icons = [
-    'Mathematics' => 'bi-calculator',
-    'Math' => 'bi-calculator',
-    'Physics' => 'bi-lightning-charge',
-    'Chemistry' => 'bi-droplet-half',
-    'Computer Science' => 'bi-pc-display',
-    'Computer' => 'bi-pc-display',
-    'English' => 'bi-book',
-    'Urdu' => 'bi-pen',
-    'Biology' => 'bi-heart-pulse',
-    'default' => 'bi-journal-bookmark'
-  ];
-  foreach ($icons as $key => $icon) {
-    if (stripos($subject_title, $key) !== false) {
-      return $icon;
-    }
-  }
-  return $icons['default'];
-}
+// Calculate attendance percentage
+$attendance_percentage = $total_records > 0 ? round((($total_present + $total_late) / $total_records) * 100) : 0;
 
-function getStatusBadge($status)
-{
-  switch ($status) {
-    case 'Present':
-      return 'p-ok';
-    case 'Absent':
-      return 'p-danger';
-    case 'Late':
-      return 'p-warn';
-    default:
-      return 'p-grey';
-  }
-}
-
-function getStatusLabel($status)
-{
-  switch ($status) {
-    case 'Present':
-      return 'Present';
-    case 'Absent':
-      return 'Absent';
-    case 'Late':
-      return 'Late';
-    default:
-      return 'Unknown';
-  }
-}
+// Get teacher info
+$teacher_stmt = $conn->prepare("
+    SELECT full_name, email, qualification 
+    FROM teachers 
+    WHERE user_id = :user_id
+");
+$teacher_stmt->bindValue(':user_id', $teacher_id);
+$teacher_stmt->execute();
+$teacher = $teacher_stmt->fetch();
+$teacher_name = $teacher['full_name'] ?? 'Mr. Ahmed';
+$teacher_initials = implode('', array_map(function($word) {
+    return strtoupper(substr($word, 0, 1));
+}, explode(' ', $teacher_name)));
 ?>
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="description" content="My Attendance — Crescent Public School Student Portal" />
-  <title>My Attendance · Student Portal · Crescent Public School</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
-  <link rel="icon" href="assets/images/logo.svg" type="image/svg+xml" />
-  <style>
-    :root {
-      --primary: #1a2b4c;
-      --primary-light: #2c4a7a;
-      --secondary: #2b6da9;
-      --accent: #e8a838;
-      --bg: #f0f4f9;
-      --card-bg: #ffffff;
-      --text: #1e293b;
-      --muted: #64748b;
-      --border: #e2e8f0;
-      --shadow: 0 2px 16px rgba(0, 0, 0, 0.06);
-      --radius: 16px;
-      --radius-sm: 10px;
-      --transition: 0.25s ease;
-      --ok: #2b9c6e;
-      --danger: #c9434a;
-      --warn: #d97706;
-      --info: #2563eb;
-    }
-
-    * {
-      box-sizing: border-box;
-    }
-
-    body {
-      background: var(--bg);
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      color: var(--text);
-      margin: 0;
-      padding: 0;
-    }
-
-    .nav-toggle {
-      display: none;
-    }
-
-    .nav-backdrop {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.4);
-      backdrop-filter: blur(3px);
-      z-index: 900;
-    }
-
-    #navToggle:checked~.nav-backdrop {
-      display: block;
-    }
-
-    #navToggle:checked~.app-sidebar {
-      transform: translateX(0);
-    }
-
-    .app-sidebar {
-      position: fixed;
-      top: 0;
-      left: 0;
-      bottom: 0;
-      width: 280px;
-      background: var(--primary);
-      color: rgba(255, 255, 255, 0.85);
-      z-index: 1000;
-      transform: translateX(-100%);
-      transition: transform 0.3s ease;
-      display: flex;
-      flex-direction: column;
-      overflow-y: auto;
-    }
-
-    @media (min-width: 992px) {
-      .app-sidebar {
-        transform: translateX(0);
-      }
-
-      .nav-backdrop {
-        display: none !important;
-      }
-    }
-
-    .sidebar-head {
-      padding: 18px 20px 14px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-
-    .sidebar-brand {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      text-decoration: none;
-      color: white;
-    }
-
-    .sidebar-brand img {
-      width: 40px;
-      height: 40px;
-      background: rgba(255, 255, 255, 0.1);
-      border-radius: 12px;
-      padding: 6px;
-    }
-
-    .brand-text strong {
-      display: block;
-      font-size: 1rem;
-    }
-
-    .brand-text small {
-      font-size: 0.7rem;
-      opacity: 0.65;
-      font-weight: 400;
-    }
-
-    .sidebar-close {
-      font-size: 1.3rem;
-      cursor: pointer;
-      opacity: 0.6;
-      transition: opacity 0.2s;
-    }
-
-    .sidebar-close:hover {
-      opacity: 1;
-    }
-
-    @media (min-width: 992px) {
-      .sidebar-close {
-        display: none;
-      }
-    }
-
-    .student-card {
-      padding: 16px 20px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-      background: rgba(255, 255, 255, 0.04);
-    }
-
-    .avatar {
-      width: 44px;
-      height: 44px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 600;
-      background: var(--secondary);
-      color: white;
-      flex-shrink: 0;
-      font-size: 1rem;
-    }
-
-    .avatar-lg {
-      width: 52px;
-      height: 52px;
-      font-size: 1.2rem;
-    }
-
-    .avatar-xl {
-      width: 64px;
-      height: 64px;
-      font-size: 1.3rem;
-    }
-
-    .student-card-text strong {
-      display: block;
-      font-size: 0.95rem;
-    }
-
-    .student-card-text small {
-      font-size: 0.75rem;
-      opacity: 0.7;
-    }
-
-    .verify {
-      color: #4ade80;
-      margin-left: auto;
-      font-size: 1.2rem;
-    }
-
-    .sidebar-nav {
-      padding: 12px 0;
-      flex: 1;
-      overflow-y: auto;
-    }
-
-    .nav-group {
-      font-size: 0.65rem;
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
-      opacity: 0.4;
-      padding: 10px 20px 4px;
-      margin: 0;
-    }
-
-    .nav-item {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 8px 20px;
-      color: rgba(255, 255, 255, 0.7);
-      text-decoration: none;
-      transition: all 0.2s;
-      border-left: 3px solid transparent;
-      font-size: 0.9rem;
-    }
-
-    .nav-item:hover {
-      background: rgba(255, 255, 255, 0.06);
-      color: white;
-    }
-
-    .nav-item.active {
-      background: rgba(255, 255, 255, 0.08);
-      color: white;
-      border-left-color: var(--accent);
-    }
-
-    .nav-item i {
-      width: 20px;
-      font-size: 1.1rem;
-    }
-
-    .nav-tag {
-      margin-left: auto;
-      background: rgba(255, 255, 255, 0.12);
-      padding: 1px 10px;
-      border-radius: 20px;
-      font-size: 0.7rem;
-      font-style: normal;
-      color: white;
-    }
-
-    .nav-tag-warn {
-      background: #f59e0b;
-      color: #1a1a1a;
-    }
-
-    .nav-tag-info {
-      background: #3b82f6;
-    }
-
-    .nav-tag-danger {
-      background: #ef4444;
-    }
-
-    .sidebar-foot {
-      padding: 16px 20px;
-      border-top: 1px solid rgba(255, 255, 255, 0.06);
-      margin-top: auto;
-    }
-
-    .logout-btn {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      color: rgba(255, 255, 255, 0.6);
-      text-decoration: none;
-      padding: 6px 0;
-      font-size: 0.9rem;
-      transition: color 0.2s;
-    }
-
-    .logout-btn:hover {
-      color: #f87171;
-    }
-
-    .copy {
-      font-size: 0.65rem;
-      opacity: 0.35;
-      margin: 6px 0 0;
-    }
-
-    .app-main {
-      margin-left: 0;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-    }
-
-    @media (min-width: 992px) {
-      .app-main {
-        margin-left: 280px;
-      }
-    }
-
-    .app-topbar {
-      background: var(--card-bg);
-      padding: 12px 24px;
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      border-bottom: 1px solid var(--border);
-      position: sticky;
-      top: 0;
-      z-index: 100;
-      flex-wrap: wrap;
-    }
-
-    .nav-btn {
-      font-size: 1.5rem;
-      cursor: pointer;
-      color: var(--text);
-      display: block;
-    }
-
-    @media (min-width: 992px) {
-      .nav-btn {
-        display: none;
-      }
-    }
-
-    .topbar-title h1 {
-      font-size: 1.15rem;
-      margin: 0;
-      font-weight: 600;
-    }
-
-    .crumbs {
-      font-size: 0.75rem;
-      color: var(--muted);
-    }
-
-    .crumbs a {
-      color: var(--secondary);
-      text-decoration: none;
-    }
-
-    .crumbs span {
-      margin: 0 4px;
-      opacity: 0.4;
-    }
-
-    .topbar-search {
-      display: flex;
-      align-items: center;
-      background: var(--bg);
-      border-radius: 30px;
-      padding: 4px 16px;
-      flex: 1;
-      min-width: 160px;
-      max-width: 320px;
-      margin-left: auto;
-    }
-
-    .topbar-search i {
-      color: var(--muted);
-      margin-right: 8px;
-    }
-
-    .topbar-search input {
-      border: none;
-      background: transparent;
-      padding: 8px 0;
-      width: 100%;
-      outline: none;
-      font-size: 0.9rem;
-    }
-
-    .topbar-actions {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-
-    .icon-drop {
-      position: relative;
-    }
-
-    .icon-btn {
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: var(--text);
-      text-decoration: none;
-      transition: background 0.2s;
-      position: relative;
-    }
-
-    .icon-btn:hover {
-      background: var(--bg);
-    }
-
-    .ping {
-      position: absolute;
-      top: 2px;
-      right: 2px;
-      background: #ef4444;
-      color: white;
-      font-size: 0.6rem;
-      width: 20px;
-      height: 20px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 600;
-    }
-
-    .drop-panel {
-      display: none;
-      position: absolute;
-      right: 0;
-      top: calc(100% + 8px);
-      background: white;
-      border-radius: var(--radius-sm);
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
-      width: 340px;
-      padding: 8px 0;
-      border: 1px solid var(--border);
-      z-index: 200;
-    }
-
-    .icon-drop:hover .drop-panel {
-      display: block;
-    }
-
-    .drop-head {
-      display: flex;
-      justify-content: space-between;
-      padding: 8px 16px 12px;
-      border-bottom: 1px solid var(--border);
-      font-size: 0.85rem;
-    }
-
-    .drop-head a {
-      color: var(--secondary);
-      text-decoration: none;
-      font-size: 0.8rem;
-    }
-
-    .drop-row {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 10px 16px;
-      text-decoration: none;
-      color: var(--text);
-      transition: background 0.15s;
-    }
-
-    .drop-row:hover {
-      background: var(--bg);
-    }
-
-    .drop-row p {
-      margin: 0;
-      font-size: 0.85rem;
-    }
-
-    .drop-row small {
-      font-size: 0.7rem;
-      color: var(--muted);
-    }
-
-    .dot-ico {
-      width: 36px;
-      height: 36px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-    }
-
-    .p-info {
-      background: #dbeafe;
-      color: #2563eb;
-    }
-
-    .p-warn {
-      background: #fef3c7;
-      color: #d97706;
-    }
-
-    .p-teal {
-      background: #d1fae5;
-      color: #059669;
-    }
-
-    .p-violet {
-      background: #ede9fe;
-      color: #7c3aed;
-    }
-
-    .p-danger {
-      background: #fee2e2;
-      color: #dc2626;
-    }
-
-    .p-ok {
-      background: #d1fae5;
-      color: #065f46;
-    }
-
-    .p-grey {
-      background: #f1f5f9;
-      color: #475569;
-    }
-
-    .profile-chip {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 4px 12px 4px 4px;
-      border-radius: 30px;
-      text-decoration: none;
-      color: var(--text);
-      transition: background 0.2s;
-    }
-
-    .profile-chip:hover {
-      background: var(--bg);
-    }
-
-    .profile-chip .avatar {
-      width: 32px;
-      height: 32px;
-      font-size: 0.75rem;
-    }
-
-    .profile-chip .who b {
-      display: block;
-      font-size: 0.8rem;
-    }
-
-    .profile-chip .who small {
-      font-size: 0.65rem;
-      color: var(--muted);
-    }
-
-    .profile-chip i {
-      font-size: 0.7rem;
-      color: var(--muted);
-    }
-
-    .app-content {
-      padding: 24px;
-      flex: 1;
-    }
-
-    @media (max-width: 576px) {
-      .app-content {
-        padding: 16px;
-      }
-    }
-
-    .eyebrow {
-      font-size: 0.75rem;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      color: var(--muted);
-      display: block;
-      margin-bottom: 4px;
-    }
-
-    .welcome h2 {
-      font-size: 1.5rem;
-      font-weight: 700;
-    }
-
-    .quick-chips {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      margin-top: 12px;
-    }
-
-    .chip {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 14px;
-      background: white;
-      border-radius: 30px;
-      text-decoration: none;
-      color: var(--text);
-      font-size: 0.8rem;
-      border: 1px solid var(--border);
-      transition: all 0.2s;
-    }
-
-    .chip:hover {
-      border-color: var(--secondary);
-      color: var(--secondary);
-    }
-
-    .fact {
-      background: white;
-      padding: 12px 14px;
-      border-radius: var(--radius-sm);
-      text-align: center;
-      border: 1px solid var(--border);
-    }
-
-    .fact small {
-      display: block;
-      font-size: 0.65rem;
-      color: var(--muted);
-    }
-
-    .fact strong {
-      font-size: 1.3rem;
-      display: block;
-    }
-
-    .fact span {
-      font-size: 0.7rem;
-      color: var(--muted);
-    }
-
-    .card {
-      border: none;
-      border-radius: var(--radius);
-      box-shadow: var(--shadow);
-      background: white;
-    }
-
-    .card-head {
-      padding: 16px 20px 0;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-
-    .card-head h3 {
-      font-size: 1rem;
-      font-weight: 600;
-      margin: 0;
-    }
-
-    .card-head .sub {
-      font-size: 0.8rem;
-      font-weight: 400;
-      color: var(--muted);
-      display: block;
-    }
-
-    .card-body {
-      padding: 20px;
-    }
-
-    .card-body.tight {
-      padding: 16px 20px;
-    }
-
-    .pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 4px 14px;
-      border-radius: 30px;
-      font-size: 0.75rem;
-      font-weight: 500;
-      background: var(--bg);
-      color: var(--text);
-    }
-
-    .pill.p-ok {
-      background: #d1fae5;
-      color: #065f46;
-    }
-
-    .pill.p-teal {
-      background: #d1fae5;
-      color: #059669;
-    }
-
-    .pill.p-info {
-      background: #dbeafe;
-      color: #1e40af;
-    }
-
-    .pill.p-warn {
-      background: #fef3c7;
-      color: #92400e;
-    }
-
-    .pill.p-danger {
-      background: #fee2e2;
-      color: #991b1b;
-    }
-
-    .pill.p-grey {
-      background: #f1f5f9;
-      color: #475569;
-    }
-
-    .pill.bare {
-      background: transparent;
-      border: 1px solid var(--border);
-    }
-
-    .subject-chip {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 4px 12px;
-      border-radius: 20px;
-      font-size: 0.8rem;
-      font-weight: 500;
-    }
-
-    .subject-chip.s-math {
-      background: #dbeafe;
-      color: #1e40af;
-    }
-
-    .subject-chip.s-phy {
-      background: #ede9fe;
-      color: #5b21b6;
-    }
-
-    .subject-chip.s-chem {
-      background: #d1fae5;
-      color: #065f46;
-    }
-
-    .subject-chip.s-cs {
-      background: #cffafe;
-      color: #0e7490;
-    }
-
-    .subject-chip.s-eng {
-      background: #fef3c7;
-      color: #92400e;
-    }
-
-    .subject-chip.s-urdu {
-      background: #fee2e2;
-      color: #991b1b;
-    }
-
-    .stat-card {
-      background: white;
-      border-radius: var(--radius);
-      padding: 16px 18px;
-      border: 1px solid var(--border);
-      transition: all var(--transition);
-    }
-
-    .stat-card:hover {
-      transform: translateY(-2px);
-      box-shadow: var(--shadow);
-    }
-
-    .stat-card .stat-top {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 4px;
-    }
-
-    .stat-ico {
-      width: 40px;
-      height: 40px;
-      border-radius: 12px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 1.2rem;
-      background: var(--bg);
-    }
-
-    .stat-card.teal .stat-ico {
-      background: #d1fae5;
-      color: #059669;
-    }
-
-    .stat-card.ok .stat-ico {
-      background: #d1fae5;
-      color: #065f46;
-    }
-
-    .stat-card.danger .stat-ico {
-      background: #fee2e2;
-      color: #dc2626;
-    }
-
-    .stat-card.amber .stat-ico {
-      background: #fef3c7;
-      color: #d97706;
-    }
-
-    .stat-trend {
-      font-size: 0.7rem;
-      font-weight: 500;
-      color: var(--ok);
-      background: #d1fae5;
-      padding: 2px 10px;
-      border-radius: 20px;
-    }
-
-    .stat-trend.down {
-      color: var(--danger);
-      background: #fee2e2;
-    }
-
-    .stat-num {
-      font-size: 1.8rem;
-      font-weight: 700;
-      margin: 0;
-      line-height: 1.2;
-    }
-
-    .stat-num small {
-      font-size: 1rem;
-      font-weight: 400;
-      color: var(--muted);
-    }
-
-    .stat-title {
-      font-weight: 600;
-      margin: 0;
-      font-size: 0.9rem;
-    }
-
-    .stat-desc {
-      font-size: 0.75rem;
-      color: var(--muted);
-      margin: 0;
-    }
-
-    .stat-bar {
-      display: block;
-      height: 4px;
-      border-radius: 4px;
-      background: var(--bg);
-      overflow: hidden;
-      margin-top: 8px;
-    }
-
-    .stat-bar i {
-      display: block;
-      height: 100%;
-      border-radius: 4px;
-      background: var(--ok);
-    }
-
-    .stat-card.danger .stat-bar i {
-      background: var(--danger);
-    }
-
-    .stat-card.amber .stat-bar i {
-      background: var(--accent);
-    }
-
-    .donut {
-      width: 140px;
-      height: 140px;
-      border-radius: 50%;
-      background: conic-gradient(var(--ok) 0%
-          <?php echo $attendance_stats['percentage']; ?>
-          %, var(--danger)
-          <?php echo $attendance_stats['percentage']; ?>
-          %
-          <?php echo $attendance_stats['percentage'] + (($attendance_stats['total_classes'] > 0 ? round(($attendance_stats['absent'] / $attendance_stats['total_classes']) * 100) : 0)); ?>
-          %, var(--accent)
-          <?php echo $attendance_stats['percentage'] + (($attendance_stats['total_classes'] > 0 ? round(($attendance_stats['absent'] / $attendance_stats['total_classes']) * 100) : 0)); ?>
-          % 100%);
-      margin: 0 auto 16px;
-      position: relative;
-    }
-
-    .donut-mid {
-      position: absolute;
-      inset: 20px;
-      border-radius: 50%;
-      background: white;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .donut-mid b {
-      font-size: 1.6rem;
-      display: block;
-    }
-
-    .donut-mid small {
-      font-size: 0.7rem;
-      color: var(--muted);
-    }
-
-    .legend {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      margin-top: 8px;
-    }
-
-    .legend-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 0.8rem;
-    }
-
-    .legend-row .dot {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      flex-shrink: 0;
-    }
-
-    .legend-row span {
-      flex: 1;
-      color: var(--muted);
-    }
-
-    .legend-row b {
-      font-weight: 600;
-      font-size: 0.8rem;
-    }
-
-    .divider-soft {
-      height: 1px;
-      background: var(--border);
-      margin: 12px 0;
-    }
-
-    .alert-soft {
-      padding: 10px 14px;
-      border-radius: var(--radius-sm);
-      display: flex;
-      align-items: flex-start;
-      gap: 10px;
-      font-size: 0.85rem;
-    }
-
-    .alert-soft.teal {
-      background: #f0fdf4;
-      border-left: 3px solid #059669;
-    }
-
-    .alert-soft i {
-      margin-top: 2px;
-      color: #059669;
-    }
-
-    .notice-row {
-      display: flex;
-      gap: 12px;
-      align-items: center;
-      padding: 8px 0;
-      border-bottom: 1px solid var(--border);
-    }
-
-    .notice-row:last-child {
-      border-bottom: none;
-    }
-
-    .notice-row .notice-date {
-      text-align: center;
-      min-width: 44px;
-      background: var(--bg);
-      padding: 4px 8px;
-      border-radius: var(--radius-sm);
-    }
-
-    .notice-row .notice-date b {
-      display: block;
-      font-size: 1.1rem;
-    }
-
-    .notice-row .notice-date small {
-      font-size: 0.6rem;
-      color: var(--muted);
-    }
-
-    .notice-row h4 {
-      font-size: 0.9rem;
-      margin: 0;
-      font-weight: 600;
-    }
-
-    .notice-row p {
-      font-size: 0.75rem;
-      color: var(--muted);
-      margin: 0;
-    }
-
-    .notice-row.ok {
-      border-left: 3px solid var(--ok);
-    }
-
-    .notice-row.danger {
-      border-left: 3px solid var(--danger);
-    }
-
-    .notice-row.amber {
-      border-left: 3px solid var(--accent);
-    }
-
-    .bar {
-      display: block;
-      height: 6px;
-      border-radius: 4px;
-      background: var(--bg);
-      overflow: hidden;
-    }
-
-    .bar.slim {
-      height: 4px;
-    }
-
-    .bar i {
-      display: block;
-      height: 100%;
-      border-radius: 4px;
-      transition: width 0.6s ease;
-    }
-
-    .table {
-      font-size: 0.85rem;
-      margin: 0;
-    }
-
-    .table th {
-      font-weight: 600;
-      color: var(--muted);
-      border-color: var(--border);
-      font-size: 0.75rem;
-      text-transform: uppercase;
-      letter-spacing: 0.3px;
-    }
-
-    .table td {
-      border-color: var(--border);
-      vertical-align: middle;
-    }
-
-    .t-strong {
-      font-weight: 500;
-    }
-
-    .btn-solid,
-    .btn-outline {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 20px;
-      border-radius: 30px;
-      text-decoration: none;
-      font-size: 0.85rem;
-      font-weight: 500;
-      transition: all 0.2s;
-      border: none;
-    }
-
-    .btn-solid {
-      background: var(--secondary);
-      color: white;
-    }
-
-    .btn-solid:hover {
-      background: var(--primary-light);
-      color: white;
-    }
-
-    .btn-outline {
-      background: transparent;
-      color: var(--text);
-      border: 1px solid var(--border);
-    }
-
-    .btn-outline:hover {
-      border-color: var(--secondary);
-      color: var(--secondary);
-    }
-
-    .page-foot {
-      padding: 16px 24px;
-      border-top: 1px solid var(--border);
-      font-size: 0.75rem;
-      color: var(--muted);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-
-    .page-foot a {
-      color: var(--muted);
-      text-decoration: none;
-    }
-
-    .page-foot a:hover {
-      color: var(--text);
-    }
-
-    .lift {
-      transition: transform 0.2s;
-    }
-
-    .lift:hover {
-      transform: translateY(-2px);
-    }
-
-    .rise {
-      animation: rise 0.4s ease forwards;
-    }
-
-    .rise-1 {
-      animation-delay: 0.05s;
-      opacity: 0;
-      animation-fill-mode: forwards;
-    }
-
-    .rise-2 {
-      animation-delay: 0.1s;
-      opacity: 0;
-      animation-fill-mode: forwards;
-    }
-
-    .rise-3 {
-      animation-delay: 0.15s;
-      opacity: 0;
-      animation-fill-mode: forwards;
-    }
-
-    .rise-4 {
-      animation-delay: 0.2s;
-      opacity: 0;
-      animation-fill-mode: forwards;
-    }
-
-    @keyframes rise {
-      from {
-        opacity: 0;
-        transform: translateY(12px);
-      }
-
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-
-    @media (max-width: 768px) {
-      .topbar-title h1 {
-        font-size: 0.95rem;
-      }
-
-      .topbar-search {
-        min-width: 120px;
-        max-width: 180px;
-      }
-
-      .profile-chip .who {
-        display: none;
-      }
-
-      .drop-panel {
-        width: 300px;
-        right: -40px;
-      }
-
-      .card-head {
-        flex-direction: column;
-        align-items: flex-start;
-      }
-
-      .stat-num {
-        font-size: 1.4rem;
-      }
-    }
-
-    @media (max-width: 576px) {
-      .topbar-search {
-        display: none;
-      }
-
-      .app-topbar {
-        padding: 10px 16px;
-      }
-
-      .fact strong {
-        font-size: 1rem;
-      }
-
-      .page-foot {
-        flex-direction: column;
-        text-align: center;
-      }
-
-      .donut {
-        width: 100px;
-        height: 100px;
-      }
-
-      .donut-mid {
-        inset: 14px;
-      }
-
-      .donut-mid b {
-        font-size: 1.2rem;
-      }
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Attendance | Teacher Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        /* Sidebar Styles */
+        .td-wrapper {
+            display: flex;
+            min-height: 100vh;
+        }
+        .td-sidebar {
+            width: 260px;
+            background: #2c3e50;
+            color: #ecf0f1;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+            z-index: 1000;
+            transition: transform 0.3s ease;
+        }
+        .td-main {
+            flex: 1;
+            margin-left: 260px;
+            background: #f4f6f9;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .td-brand {
+            padding: 20px;
+            font-size: 1.3rem;
+            font-weight: bold;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .td-brand i {
+            font-size: 1.8rem;
+            color: #3498db;
+        }
+        .td-brand small {
+            display: block;
+            font-size: 0.65rem;
+            font-weight: normal;
+            opacity: 0.7;
+        }
+        .td-teacher-box {
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .td-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #3498db;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: white;
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+        .td-teacher-box h6 {
+            margin: 0;
+            font-size: 0.9rem;
+            color: white;
+        }
+        .td-teacher-box p {
+            margin: 0;
+            font-size: 0.75rem;
+            opacity: 0.7;
+        }
+        .td-nav {
+            padding: 10px 0;
+        }
+        .td-nav-title {
+            padding: 10px 20px;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            opacity: 0.5;
+            letter-spacing: 1px;
+        }
+        .td-nav a {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 20px;
+            color: rgba(255,255,255,0.7);
+            text-decoration: none;
+            transition: all 0.3s;
+            border-left: 3px solid transparent;
+        }
+        .td-nav a:hover {
+            background: rgba(255,255,255,0.05);
+            color: white;
+        }
+        .td-nav a.active {
+            background: rgba(52,152,219,0.2);
+            color: white;
+            border-left-color: #3498db;
+        }
+        .td-nav a.logout {
+            border-top: 1px solid rgba(255,255,255,0.1);
+            margin-top: 10px;
+            color: #e74c3c;
+        }
+        .td-nav a.logout:hover {
+            background: rgba(231,76,60,0.1);
+        }
+        .td-nav a i {
+            width: 20px;
+        }
+
+        /* Navbar Styles */
+        .td-navbar {
+            background: white;
+            padding: 15px 25px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            flex-wrap: wrap;
+        }
+        .td-burger {
+            font-size: 1.5rem;
+            cursor: pointer;
+            display: none;
+        }
+        .td-page-title {
+            font-size: 1.2rem;
+            margin: 0;
+        }
+        .td-page-title small {
+            font-size: 0.75rem;
+            color: #6c757d;
+            font-weight: normal;
+        }
+        .td-search {
+            min-width: 200px;
+        }
+        .td-icon-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #f8f9fa;
+            color: #333;
+            text-decoration: none;
+            position: relative;
+            transition: background 0.3s;
+        }
+        .td-icon-btn:hover {
+            background: #e9ecef;
+            color: #333;
+        }
+        .td-dot {
+            width: 8px;
+            height: 8px;
+            background: #e74c3c;
+            border-radius: 50%;
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            border: 2px solid white;
+        }
+        .td-content {
+            padding: 25px;
+            flex: 1;
+        }
+        .td-footer {
+            background: white;
+            padding: 15px 25px;
+            text-align: center;
+            font-size: 0.85rem;
+            color: #6c757d;
+            border-top: 1px solid #e9ecef;
+        }
+
+        /* Stat Cards */
+        .stat-card {
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            background: white;
+            transition: transform 0.2s;
+            border: none;
+        }
+        .stat-card:hover {
+            transform: translateY(-2px);
+        }
+        .stat-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 24px;
+            flex-shrink: 0;
+        }
+        .stat-card h3 {
+            margin: 0;
+            font-size: 1.5rem;
+        }
+        .stat-card p {
+            margin: 0;
+            color: #6c757d;
+            font-size: 0.85rem;
+        }
+        .bg-grad-1 { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .bg-grad-2 { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); }
+        .bg-grad-3 { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
+        .bg-grad-4 { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+        .bg-grad-5 { background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); }
+
+        /* Overlay for mobile */
+        .td-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 999;
+        }
+        #tdSidebarToggle {
+            display: none;
+        }
+        #tdSidebarToggle:checked ~ .td-overlay {
+            display: block;
+        }
+        #tdSidebarToggle:checked ~ .td-sidebar {
+            transform: translateX(0);
+        }
+
+        /* Responsive */
+        @media (max-width: 992px) {
+            .td-sidebar {
+                transform: translateX(-100%);
+            }
+            .td-main {
+                margin-left: 0;
+            }
+            .td-burger {
+                display: block;
+            }
+            #tdSidebarToggle:checked ~ .td-sidebar {
+                transform: translateX(0);
+            }
+            .td-search {
+                min-width: 150px;
+            }
+        }
+        @media (max-width: 576px) {
+            .td-navbar {
+                padding: 10px 15px;
+            }
+            .td-content {
+                padding: 15px;
+            }
+            .td-search {
+                min-width: 100px;
+                order: 10;
+                width: 100%;
+            }
+            .stat-card {
+                padding: 10px;
+                gap: 10px;
+            }
+            .stat-icon {
+                width: 36px;
+                height: 36px;
+                font-size: 18px;
+            }
+            .stat-card h3 {
+                font-size: 1.2rem;
+            }
+        }
+
+        /* Attendance specific styles */
+        .student-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: white;
+            font-size: 12px;
+            flex-shrink: 0;
+        }
+        .status-badge {
+            font-size: 0.85rem;
+            padding: 5px 12px;
+        }
+        .modal-body {
+            max-height: 70vh;
+            overflow-y: auto;
+        }
+    </style>
 </head>
-
 <body>
-
-  <input type="checkbox" id="navToggle" class="nav-toggle" />
-  <label for="navToggle" class="nav-backdrop" aria-hidden="true"></label>
-
-  <aside class="app-sidebar">
-    <div class="sidebar-head">
-      <a href="index.php" class="sidebar-brand">
-        <img src="assets/images/logo.svg" alt="Crescent Public School logo" />
-        <span class="brand-text"><strong>Crescent Public School</strong><small>Student Portal</small></span>
-      </a>
-      <label for="navToggle" class="sidebar-close" aria-label="Close navigation"><i class="bi bi-x-lg"></i></label>
-    </div>
-    <div class="student-card">
-      <span class="avatar avatar-lg"><?php echo $student_initials; ?></span>
-      <div class="student-card-text">
-        <strong><?php echo htmlspecialchars($student_name); ?></strong>
-        <small><?php echo htmlspecialchars($class_name . ' · ' . ($student['student_uid'] ?? 'STU-0000')); ?></small>
-      </div>
-      <span class="verify" title="Verified student"><i class="bi bi-patch-check-fill"></i></span>
-    </div>
-    <nav class="sidebar-nav">
-      <p class="nav-group">Overview</p>
-      <a class="nav-item" href="index.php"><i class="bi bi-columns-gap"></i><span>Dashboard</span></a>
-      <p class="nav-group">Academics</p>
-      <a class="nav-item" href="subjects.php"><i class="bi bi-journal-bookmark"></i><span>My Subjects</span><em
-          class="nav-tag"><?php echo count($subject_attendance); ?></em></a>
-      <a class="nav-item" href="timetable.php"><i class="bi bi-calendar-week"></i><span>My Timetable</span></a>
-      <a class="nav-item active" href="attendance.php"><i class="bi bi-check2-square"></i><span>My Attendance</span></a>
-      <a class="nav-item" href="assignments.php"><i class="bi bi-journal-text"></i><span>Assignments</span><em
-          class="nav-tag nav-tag-warn"><?php echo $assignment_count; ?></em></a>
-      <a class="nav-item" href="exams.php"><i class="bi bi-pencil-square"></i><span>Exams</span><em
-          class="nav-tag nav-tag-info">3</em></a>
-      <a class="nav-item" href="results.php"><i class="bi bi-graph-up-arrow"></i><span>Results</span></a>
-      <p class="nav-group">Finance</p>
-      <a class="nav-item" href="fees.php"><i class="bi bi-wallet2"></i><span>Fees</span><em
-          class="nav-tag nav-tag-danger">1</em></a>
-      <p class="nav-group">School Life</p>
-      <a class="nav-item" href="notices.php"><i class="bi bi-megaphone"></i><span>Notices</span></a>
-      <a class="nav-item" href="events.php"><i class="bi bi-calendar2-heart"></i><span>Events</span></a>
-      <a class="nav-item" href="messages.php"><i class="bi bi-envelope"></i><span>Messages</span><em
-          class="nav-tag"><?php echo $unread_count; ?></em></a>
-      <p class="nav-group">Account</p>
-      <a class="nav-item" href="profile.php"><i class="bi bi-person-badge"></i><span>My Profile</span></a>
-      <a class="nav-item" href="settings.php"><i class="bi bi-gear"></i><span>Settings</span></a>
-    </nav>
-    <div class="sidebar-foot">
-      <a href="#" class="logout-btn"><i class="bi bi-box-arrow-right"></i><span>Logout</span></a>
-      <p class="copy">Portal v2.6 · Session 2026–27</p>
-    </div>
-  </aside>
-
-  <div class="app-main">
-    <header class="app-topbar">
-      <label for="navToggle" class="nav-btn" aria-label="Open navigation"><i class="bi bi-list"></i></label>
-      <div class="topbar-title">
-        <h1>My Attendance</h1>
-        <div class="crumbs"><a href="index.php">Home</a><span>/</span>Academics<span>/</span>My Attendance</div>
-      </div>
-      <div class="topbar-search"><i class="bi bi-search"></i><input type="search"
-          placeholder="Search attendance records…" aria-label="Search" id="attendanceSearch" /></div>
-      <div class="topbar-actions">
-        <div class="icon-drop">
-          <a href="notices.php" class="icon-btn" aria-label="Notifications"><i class="bi bi-bell"></i><span
-              class="ping"><?php echo $notice_count; ?></span></a>
-          <div class="drop-panel">
-            <div class="drop-head"><strong>Notifications</strong><a href="notices.php">View all</a></div>
-            <a href="exams.php" class="drop-row"><i class="dot-ico p-info"><i class="bi bi-pencil-square"></i></i><span>
-                <p>Mid-Term timetable published</p><small>Examination Cell · 2 hours ago</small>
-              </span></a>
-            <a href="assignments.php" class="drop-row"><i class="dot-ico p-warn"><i
-                  class="bi bi-journal-text"></i></i><span>
-                <p>Assignments due soon</p><small>Mr. Ahmed · <?php echo $assignment_count; ?> pending</small>
-              </span></a>
-          </div>
+<input type="checkbox" id="tdSidebarToggle">
+<div class="td-wrapper">
+    <label for="tdSidebarToggle" class="td-overlay"></label>
+    
+    <!-- Sidebar -->
+    <aside class="td-sidebar">
+        <div class="td-brand">
+            <i class="bi bi-mortarboard-fill"></i>
+            <span>Bright Future<small>School Portal</small></span>
         </div>
-        <div class="icon-drop">
-          <a href="messages.php" class="icon-btn" aria-label="Messages"><i class="bi bi-envelope"></i><span
-              class="ping"><?php echo $unread_count; ?></span></a>
-          <div class="drop-panel">
-            <div class="drop-head"><strong>Messages</strong><a href="messages.php">Open inbox</a></div>
-            <a href="messages.php" class="drop-row"><span class="avatar info">SR</span><span>
-                <p>Ms. Sara Khan · Lab report feedback</p><small>Today, 09:14 AM</small>
-              </span></a>
-          </div>
-        </div>
-        <div class="icon-drop">
-          <a href="profile.php" class="profile-chip"><span class="avatar"><?php echo $student_initials; ?></span><span
-              class="who"><b><?php echo htmlspecialchars($student_name); ?></b><small><?php echo htmlspecialchars($class_name); ?></small></span><i
-              class="bi bi-chevron-down"></i></a>
-          <div class="drop-panel">
-            <div class="drop-head"><strong><?php echo htmlspecialchars($student_name); ?></strong><span
-                class="pill p-ok">Active</span></div>
-            <a href="profile.php" class="drop-row"><i class="dot-ico p-teal"><i
-                  class="bi bi-person-badge"></i></i><span>
-                <p>My Profile</p><small><?php echo $student['student_uid'] ?? 'STU-0000'; ?></small>
-              </span></a>
-            <a href="settings.php" class="drop-row"><i class="dot-ico p-violet"><i class="bi bi-gear"></i></i><span>
-                <p>Settings</p><small>Preferences &amp; alerts</small>
-              </span></a>
-            <a href="#" class="drop-row"><i class="dot-ico p-danger"><i class="bi bi-box-arrow-right"></i></i><span>
-                <p>Logout</p><small>End this session</small>
-              </span></a>
-          </div>
-        </div>
-      </div>
-    </header>
-
-    <main class="app-content">
-
-      <section class="welcome rise">
-        <div class="row g-4 align-items-center">
-          <div class="col-lg-8">
-            <span class="eyebrow">Session 2026–27 · Term 1 record</span>
-            <h2>
-              <?php echo $attendance_stats['percentage'] >= 75 ? 'You are comfortably above the 75% requirement' : 'Attendance needs improvement'; ?>
-            </h2>
-            <p>A minimum of 75% attendance is required to sit for the Mid-Term examinations. You currently stand at
-              <?php echo $attendance_stats['percentage']; ?>% with <?php echo $attendance_stats['absent']; ?> absences
-              and <?php echo $attendance_stats['late']; ?> late arrivals recorded this term.</p>
-            <div class="quick-chips">
-              <a href="timetable.php" class="chip"><i class="bi bi-calendar-week"></i> Timetable</a>
-              <a href="messages.php" class="chip"><i class="bi bi-envelope"></i> Apply for Leave</a>
-              <a href="results.php" class="chip"><i class="bi bi-graph-up-arrow"></i> Results</a>
+        <div class="td-teacher-box">
+            <div class="td-avatar"><?php echo $teacher_initials; ?></div>
+            <div>
+                <h6><?php echo htmlspecialchars($teacher_name); ?></h6>
+                <p>Mathematics Teacher</p>
             </div>
-          </div>
-          <div class="col-lg-4">
-            <div class="row g-2">
-              <div class="col-6">
-                <div class="fact"><small>Total
-                    Classes</small><strong><?php echo $attendance_stats['total_classes']; ?></strong><span>Term 1</span>
-                </div>
-              </div>
-              <div class="col-6">
-                <div class="fact">
-                  <small>Present</small><strong><?php echo $attendance_stats['present']; ?></strong><span><?php echo $attendance_stats['percentage']; ?>%</span>
-                </div>
-              </div>
-              <div class="col-6">
-                <div class="fact">
-                  <small>Absent</small><strong><?php echo $attendance_stats['absent']; ?></strong><span><?php echo $attendance_stats['total_classes'] > 0 ? round(($attendance_stats['absent'] / $attendance_stats['total_classes']) * 100) : 0; ?>%</span>
-                </div>
-              </div>
-              <div class="col-6">
-                <div class="fact">
-                  <small>Late</small><strong><?php echo $attendance_stats['late']; ?></strong><span><?php echo $attendance_stats['total_classes'] > 0 ? round(($attendance_stats['late'] / $attendance_stats['total_classes']) * 100) : 0; ?>%</span>
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
-      </section>
+        <nav class="td-nav">
+            <div class="td-nav-title">Main</div>
+            <a href="index.php"><i class="bi bi-speedometer2"></i> Dashboard</a>
+            <a href="students.php"><i class="bi bi-people"></i> My Students</a>
+            <a href="attendance.php" class="active"><i class="bi bi-calendar2-check"></i> Attendance</a>
+            <a href="subjects.php"><i class="bi bi-journal-bookmark"></i> My Subjects</a>
+            <a href="timetable.php"><i class="bi bi-clock-history"></i> My Timetable</a>
+            <div class="td-nav-title">Academics</div>
+            <a href="assignments.php"><i class="bi bi-file-earmark-text"></i> Assignments</a>
+            <a href="exams.php"><i class="bi bi-pencil-square"></i> Exams</a>
+            <a href="results.php"><i class="bi bi-bar-chart-line"></i> Results</a>
+            <div class="td-nav-title">Communication</div>
+            <a href="notices.php"><i class="bi bi-megaphone"></i> Notices</a>
+            <a href="messages.php"><i class="bi bi-chat-dots"></i> Messages</a>
+            <div class="td-nav-title">Account</div>
+            <a href="profile.php"><i class="bi bi-person-badge"></i> My Profile</a>
+            <a href="settings.php"><i class="bi bi-gear"></i> Settings</a>
+            <a href="#" class="logout"><i class="bi bi-box-arrow-right"></i> Logout</a>
+        </nav>
+    </aside>
 
-      <!-- STATISTICS -->
-      <section class="row g-3 mt-4">
-        <div class="col-6 col-xl-3 rise rise-1">
-          <div class="stat-card teal">
-            <div class="stat-top"><span class="stat-ico"><i class="bi bi-pie-chart"></i></span><span
-                class="stat-trend"><?php echo $attendance_stats['percentage'] >= 75 ? '+Good' : 'Low'; ?></span></div>
-            <h3 class="stat-num"><?php echo $attendance_stats['percentage']; ?><small>%</small></h3>
-            <p class="stat-title">Overall Attendance</p>
-            <p class="stat-desc"><?php echo $attendance_stats['present']; ?> of
-              <?php echo $attendance_stats['total_classes']; ?> classes attended</p>
-            <span class="stat-bar"><i style="width:<?php echo $attendance_stats['percentage']; ?>%"></i></span>
-          </div>
-        </div>
-        <div class="col-6 col-xl-3 rise rise-2">
-          <div class="stat-card ok">
-            <div class="stat-top"><span class="stat-ico"><i class="bi bi-check2-circle"></i></span><span
-                class="stat-trend">Consistent</span></div>
-            <h3 class="stat-num"><?php echo $attendance_stats['present']; ?></h3>
-            <p class="stat-title">Present</p>
-            <p class="stat-desc">
-              <?php echo $attendance_stats['total_classes'] > 0 ? round(($attendance_stats['present'] / $attendance_stats['total_classes']) * 100) : 0; ?>%
-              of all conducted classes</p>
-            <span class="stat-bar"><i
-                style="width:<?php echo $attendance_stats['total_classes'] > 0 ? round(($attendance_stats['present'] / $attendance_stats['total_classes']) * 100) : 0; ?>%"></i></span>
-          </div>
-        </div>
-        <div class="col-6 col-xl-3 rise rise-3">
-          <div class="stat-card danger">
-            <div class="stat-top"><span class="stat-ico"><i class="bi bi-x-circle"></i></span><span
-                class="stat-trend down"><?php echo $attendance_stats['absent']; ?> total</span></div>
-            <h3 class="stat-num"><?php echo $attendance_stats['absent']; ?></h3>
-            <p class="stat-title">Absent</p>
-            <p class="stat-desc">
-              <?php echo $attendance_stats['total_classes'] > 0 ? round(($attendance_stats['absent'] / $attendance_stats['total_classes']) * 100) : 0; ?>%
-              of classes missed</p>
-            <span class="stat-bar"><i
-                style="width:<?php echo $attendance_stats['total_classes'] > 0 ? min(round(($attendance_stats['absent'] / $attendance_stats['total_classes']) * 100), 100) : 0; ?>%"></i></span>
-          </div>
-        </div>
-        <div class="col-6 col-xl-3 rise rise-4">
-          <div class="stat-card amber">
-            <div class="stat-top"><span class="stat-ico"><i class="bi bi-clock-history"></i></span><span
-                class="stat-trend down"><?php echo $attendance_stats['late']; ?></span></div>
-            <h3 class="stat-num"><?php echo $attendance_stats['late']; ?></h3>
-            <p class="stat-title">Late Arrivals</p>
-            <p class="stat-desc">
-              <?php echo $attendance_stats['total_classes'] > 0 ? round(($attendance_stats['late'] / $attendance_stats['total_classes']) * 100) : 0; ?>%
-              of classes</p>
-            <span class="stat-bar"><i
-                style="width:<?php echo $attendance_stats['total_classes'] > 0 ? min(round(($attendance_stats['late'] / $attendance_stats['total_classes']) * 100), 100) : 0; ?>%"></i></span>
-          </div>
-        </div>
-      </section>
-
-      <!-- DONUT + SUBJECT WISE -->
-      <section class="row g-3 mt-1">
-        <div class="col-xl-4 rise">
-          <div class="card lift h-100">
-            <div class="card-head">
-              <h3>Attendance Split <span class="sub">Present / Absent / Late</span></h3>
+    <!-- Main Content -->
+    <div class="td-main">
+        <!-- Navbar -->
+        <header class="td-navbar">
+            <label for="tdSidebarToggle" class="td-burger"><i class="bi bi-list"></i></label>
+            <h1 class="td-page-title">Attendance <small>Daily class attendance records</small></h1>
+            <div class="td-search ms-auto">
+                <form method="GET" action="" class="d-flex">
+                    <div class="input-group">
+                        <span class="input-group-text bg-white border-end-0"><i class="bi bi-search"></i></span>
+                        <input type="search" name="search" class="form-control border-start-0" placeholder="Search..." value="<?php echo htmlspecialchars($student_search); ?>">
+                        <input type="hidden" name="date" value="<?php echo htmlspecialchars($search_date); ?>">
+                        <input type="hidden" name="class" value="<?php echo htmlspecialchars($class_filter); ?>">
+                    </div>
+                </form>
             </div>
-            <div class="card-body text-center">
-              <div class="donut">
-                <div class="donut-mid">
-                  <b><?php echo $attendance_stats['percentage']; ?>%</b>
-                  <small>Present</small>
-                </div>
-              </div>
-              <div class="legend">
-                <div class="legend-row"><i class="dot" style="background:var(--ok)"></i><span>Present ·
-                    <?php echo $attendance_stats['present']; ?>
-                    classes</span><b><?php echo $attendance_stats['total_classes'] > 0 ? round(($attendance_stats['present'] / $attendance_stats['total_classes']) * 100) : 0; ?>%</b>
-                </div>
-                <div class="legend-row"><i class="dot" style="background:var(--danger)"></i><span>Absent ·
-                    <?php echo $attendance_stats['absent']; ?>
-                    classes</span><b><?php echo $attendance_stats['total_classes'] > 0 ? round(($attendance_stats['absent'] / $attendance_stats['total_classes']) * 100) : 0; ?>%</b>
-                </div>
-                <div class="legend-row"><i class="dot" style="background:var(--accent)"></i><span>Late ·
-                    <?php echo $attendance_stats['late']; ?>
-                    classes</span><b><?php echo $attendance_stats['total_classes'] > 0 ? round(($attendance_stats['late'] / $attendance_stats['total_classes']) * 100) : 0; ?>%</b>
-                </div>
-              </div>
-              <div class="divider-soft"></div>
-              <div class="alert-soft teal text-start">
-                <i class="bi bi-shield-check"></i>
-                <span>
-                  <b><?php echo $attendance_stats['percentage'] >= 75 ? 'Eligible for Mid-Terms.' : 'Attendance below 75% requirement.'; ?></b>
-                  <?php echo $attendance_stats['percentage'] >= 75 ? 'Attendance requirement of 75% is satisfied with a healthy margin.' : 'Please improve your attendance to meet the 75% requirement.'; ?>
+            <a href="notices.php" class="td-icon-btn"><i class="bi bi-bell"></i><span class="td-dot"></span></a>
+            <a href="profile.php" class="d-flex align-items-center gap-2 text-dark text-decoration-none">
+                <span class="td-avatar"><?php echo $teacher_initials; ?></span>
+                <span class="d-none d-md-block">
+                    <strong class="d-block" style="font-size:.85rem"><?php echo htmlspecialchars($teacher_name); ?></strong>
+                    <small class="text-muted" style="font-size:.72rem">Mathematics Teacher</small>
                 </span>
-              </div>
-            </div>
-          </div>
-        </div>
+            </a>
+        </header>
 
-        <div class="col-xl-8 rise rise-2">
-          <div class="card lift h-100">
-            <div class="card-head">
-              <h3>Class-wise Attendance <span class="sub">Term 1, session 2026–27</span></h3>
-            </div>
-            <div class="table-responsive">
-              <table class="table">
-                <thead>
-                  <tr>
-                    <th>Class</th>
-                    <th>Total Classes</th>
-                    <th>Present</th>
-                    <th>Absent</th>
-                    <th>Percentage</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <?php if (count($subject_attendance) > 0): ?>
-                    <?php foreach ($subject_attendance as $subject):
-                      $color = getSubjectColor($subject['subject_title'] ?? '');
-                      $icon = getSubjectIcon($subject['subject_title'] ?? '');
-                      $pct = $subject['total_classes'] > 0 ? round(($subject['present'] / $subject['total_classes']) * 100) : 0;
-                      ?>
-                      <tr>
-                        <td><span class="subject-chip <?php echo $color; ?>"><i
-                              class="bi <?php echo $icon; ?>"></i><?php echo htmlspecialchars($subject['subject_title'] ?? 'Unknown'); ?></span>
-                        </td>
-                        <td><?php echo $subject['total_classes']; ?></td>
-                        <td><?php echo $subject['present']; ?></td>
-                        <td><?php echo $subject['absent']; ?></td>
-                        <td style="min-width:150px">
-                          <span class="bar slim"><i
-                              style="width:<?php echo $pct; ?>%;background:<?php echo $pct >= 90 ? '#2b6da9' : ($pct >= 75 ? '#e8a838' : '#dc2626'); ?>"></i></span>
-                          <small style="font-size:.7rem;color:var(--muted)"><?php echo $pct; ?>%</small>
-                        </td>
-                      </tr>
-                    <?php endforeach; ?>
-                  <?php else: ?>
-                    <tr>
-                      <td colspan="5" class="text-center py-3 text-muted">No class-wise attendance data available</td>
-                    </tr>
-                  <?php endif; ?>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- MONTHLY TREND -->
-      <section class="row g-3 mt-1">
-        <div class="col-xl-7 rise">
-          <div class="card lift h-100">
-            <div class="card-head">
-              <h3>Monthly Trend <span class="sub">Attendance percentage by month</span></h3>
-            </div>
-            <div class="card-body">
-              <div class="d-flex align-items-end gap-3" style="height:190px">
-                <?php if (count($monthly_percentages) > 0): ?>
-                  <?php foreach ($monthly_percentages as $month):
-                    $height = max($month['percentage'], 10);
-                    $color = $month['percentage'] >= 90 ? '#12747f' : ($month['percentage'] >= 75 ? '#e6b25f' : '#c9434a');
-                    ?>
-                    <div class="text-center flex-fill">
-                      <div class="mx-auto rounded-top"
-                        style="height:<?php echo $height; ?>%;width:70%;background:linear-gradient(180deg,<?php echo $color; ?>,<?php echo $color; ?>)">
-                      </div>
-                      <small style="font-size:.7rem;color:var(--muted)"><?php echo substr($month['month'], 0, 3); ?></small>
-                      <b style="font-size:.75rem;display:block"><?php echo $month['percentage']; ?>%</b>
+        <!-- Content -->
+        <main class="td-content">
+            <!-- Statistics Cards -->
+            <div class="row g-3 mb-4">
+                <div class="col-6 col-xl-3">
+                    <div class="card stat-card">
+                        <div class="stat-icon bg-grad-2"><i class="bi bi-check2-circle"></i></div>
+                        <div>
+                            <h3><?php echo $total_present; ?></h3>
+                            <p>Present</p>
+                        </div>
                     </div>
-                  <?php endforeach; ?>
-                <?php else: ?>
-                  <div class="text-center w-100 py-4 text-muted">No monthly data available</div>
-                <?php endif; ?>
-              </div>
-              <div class="divider-soft"></div>
-              <p class="mb-0" style="font-size:.78rem;color:var(--muted)">
-                <i class="bi bi-info-circle me-1"></i>
-                <?php echo count($monthly_percentages) > 0 ? 'Monthly attendance trend shows your performance over time.' : 'Start attending classes to build your attendance record.'; ?>
-              </p>
-            </div>
-          </div>
-        </div>
-        <div class="col-xl-5 rise rise-2">
-          <div class="card lift h-100">
-            <div class="card-head">
-              <h3>Leave Records <span class="sub">Term 1 applications</span></h3>
-            </div>
-            <div class="card-body tight">
-              <?php if (count($leave_records) > 0): ?>
-                <?php foreach ($leave_records as $leave):
-                  $status = $leave['status'] == 'Absent' ? 'danger' : 'amber';
-                  $status_pill = $leave['status'] == 'Absent' ? 'p-danger' : 'p-warn';
-                  $status_label = $leave['status'] == 'Absent' ? 'Unapproved' : 'Late';
-                  ?>
-                  <div class="notice-row <?php echo $status; ?>">
-                    <div class="notice-date">
-                      <b><?php echo date('d', strtotime($leave['attendance_date'])); ?></b>
-                      <small><?php echo date('M', strtotime($leave['attendance_date'])); ?></small>
-                    </div>
-                    <div>
-                      <h4><?php echo $leave['status']; ?></h4>
-                      <p><?php echo htmlspecialchars($leave['remarks'] ?? 'No remarks'); ?></p>
-                      <span class="pill <?php echo $status_pill; ?>"><?php echo $status_label; ?></span>
-                    </div>
-                  </div>
-                <?php endforeach; ?>
-              <?php else: ?>
-                <div class="text-center py-3 text-muted">
-                  <i class="bi bi-file-text fs-4 d-block mb-2"></i>
-                  <p>No leave records found</p>
                 </div>
-              <?php endif; ?>
+                <div class="col-6 col-xl-3">
+                    <div class="card stat-card">
+                        <div class="stat-icon bg-grad-5"><i class="bi bi-x-circle"></i></div>
+                        <div>
+                            <h3><?php echo $total_absent; ?></h3>
+                            <p>Absent</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6 col-xl-3">
+                    <div class="card stat-card">
+                        <div class="stat-icon bg-grad-3"><i class="bi bi-clock"></i></div>
+                        <div>
+                            <h3><?php echo $total_late; ?></h3>
+                            <p>Late</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6 col-xl-3">
+                    <div class="card stat-card">
+                        <div class="stat-icon bg-grad-1"><i class="bi bi-percent"></i></div>
+                        <div>
+                            <h3><?php echo $attendance_percentage; ?>%</h3>
+                            <p>Attendance Percentage</p>
+                        </div>
+                    </div>
+                </div>
             </div>
-          </div>
+
+            <!-- Success/Error Messages -->
+            <?php if (isset($success_message)): ?>
+                <div class="alert alert-success alert-dismissible fade show" role="alert">
+                    <i class="bi bi-check-circle me-2"></i> <?php echo $success_message; ?>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            <?php endif; ?>
+            <?php if (isset($error_message)): ?>
+                <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                    <i class="bi bi-exclamation-triangle me-2"></i> <?php echo $error_message; ?>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            <?php endif; ?>
+
+            <!-- Filter Form -->
+            <div class="card mb-4">
+                <div class="card-body">
+                    <form method="GET" action="" class="row g-3 align-items-end">
+                        <div class="col-md-3">
+                            <label class="form-label">Date</label>
+                            <input type="date" name="date" class="form-control" value="<?php echo htmlspecialchars($search_date); ?>">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Class</label>
+                            <select name="class" class="form-select">
+                                <option value="">All Classes</option>
+                                <?php foreach ($classes as $class): ?>
+                                    <option value="<?php echo $class['id']; ?>" <?php echo $class_filter == $class['id'] ? 'selected' : ''; ?>>
+                                        <?php echo htmlspecialchars($class['name'] . ' - ' . $class['grade']); ?>
+                                        <?php if ($class['room_no']): ?>
+                                            (Room: <?php echo htmlspecialchars($class['room_no']); ?>)
+                                        <?php endif; ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Search Student</label>
+                            <input type="search" name="search" class="form-control" placeholder="Name or student ID" value="<?php echo htmlspecialchars($student_search); ?>">
+                        </div>
+                        <div class="col-md-2 d-grid">
+                            <button type="submit" class="btn btn-primary"><i class="bi bi-search"></i> Search</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Mark Attendance Button -->
+            <div class="mb-3">
+                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#markAttendanceModal">
+                    <i class="bi bi-plus-circle"></i> Mark Attendance
+                </button>
+            </div>
+
+            <!-- Attendance Records -->
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-calendar2-check me-2 text-primary"></i>Attendance Records</span>
+                    <div>
+                        <span class="badge bg-light text-dark me-2">
+                            Total: <?php echo $total_records; ?>
+                        </span>
+                        <?php if ($search_date): ?>
+                            <span class="badge bg-info text-white">
+                                <?php echo date('d M Y', strtotime($search_date)); ?>
+                            </span>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Student</th>
+                                <th>Class</th>
+                                <th>Date</th>
+                                <th>Check-in Time</th>
+                                <th>Status</th>
+                                <th>Remarks</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php if (count($attendance_records) > 0): ?>
+                                <?php 
+                                $avatar_colors = ['#667eea', '#f093fb', '#4facfe', '#43e97b', '#fa709a', '#f5576c', '#764ba2', '#00f2fe', '#38f9d7', '#fee140'];
+                                $idx = 0;
+                                ?>
+                                <?php foreach ($attendance_records as $record): 
+                                    $status_class = '';
+                                    $status_icon = '';
+                                    switch ($record['status']) {
+                                        case 'Present':
+                                            $status_class = 'bg-success';
+                                            $status_icon = 'bi-check-circle';
+                                            break;
+                                        case 'Absent':
+                                            $status_class = 'bg-danger';
+                                            $status_icon = 'bi-x-circle';
+                                            break;
+                                        case 'Late':
+                                            $status_class = 'bg-warning text-dark';
+                                            $status_icon = 'bi-clock';
+                                            break;
+                                        default:
+                                            $status_class = 'bg-secondary';
+                                            $status_icon = 'bi-question-circle';
+                                    }
+                                    $avatar_color = $avatar_colors[$idx % count($avatar_colors)];
+                                    $idx++;
+                                    $full_name = trim(($record['first_name'] ?? '') . ' ' . ($record['last_name'] ?? ''));
+                                    if (empty($full_name)) $full_name = 'Unknown Student';
+                                    $initials = strtoupper(substr($record['first_name'] ?? '', 0, 1) . substr($record['last_name'] ?? '', 0, 1));
+                                    if (empty($initials)) $initials = '?';
+                                ?>
+                                    <tr>
+                                        <td>
+                                            <div class="d-flex align-items-center gap-2">
+                                                <div class="student-avatar" style="background: <?php echo $avatar_color; ?>;">
+                                                    <?php echo $initials; ?>
+                                                </div>
+                                                <div>
+                                                    <div class="fw-semibold"><?php echo htmlspecialchars($full_name); ?></div>
+                                                    <small class="text-muted"><?php echo htmlspecialchars($record['student_uid'] ?? 'N/A'); ?></small>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <?php if ($record['class_name']): ?>
+                                                <div><?php echo htmlspecialchars($record['class_name']); ?></div>
+                                                <small class="text-muted">Grade: <?php echo htmlspecialchars($record['class_grade'] ?? 'N/A'); ?></small>
+                                            <?php else: ?>
+                                                <span class="text-muted">Not Assigned</span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td><?php echo $record['attendance_date'] ? date('d M Y', strtotime($record['attendance_date'])) : 'N/A'; ?></td>
+                                        <td><?php echo $record['check_in_time'] ? date('h:i A', strtotime($record['check_in_time'])) : '—'; ?></td>
+                                        <td>
+                                            <span class="badge <?php echo $status_class; ?> status-badge">
+                                                <i class="bi <?php echo $status_icon; ?> me-1"></i>
+                                                <?php echo $record['status'] ?? 'Unknown'; ?>
+                                            </span>
+                                        </td>
+                                        <td><?php echo htmlspecialchars($record['remarks'] ?? '—'); ?></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <tr>
+                                    <td colspan="6" class="text-center py-4">
+                                        <i class="bi bi-calendar2-x fs-1 d-block text-muted"></i>
+                                        <p class="text-muted mb-0">No attendance records found for the selected criteria</p>
+                                        <?php if (!empty($classes)): ?>
+                                            <button class="btn btn-sm btn-primary mt-2" data-bs-toggle="modal" data-bs-target="#markAttendanceModal">
+                                                <i class="bi bi-plus-circle"></i> Mark Attendance Now
+                                            </button>
+                                        <?php endif; ?>
+                                    </td>
+                                </tr>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="td-footer">© 2026 Bright Future School — Teacher Panel.</footer>
+    </div>
+</div>
+
+<!-- Mark Attendance Modal -->
+<div class="modal fade" id="markAttendanceModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-check2-square me-2 text-primary"></i>Mark Attendance</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="">
+                <div class="modal-body">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Date</label>
+                            <input type="date" name="attendance_date" class="form-control" value="<?php echo date('Y-m-d'); ?>" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Select Class</label>
+                            <select name="class_id" class="form-select" id="classSelect" required>
+                                <option value="">Choose a class...</option>
+                                <?php foreach ($classes as $class): ?>
+                                    <option value="<?php echo $class['id']; ?>" <?php echo $class_filter == $class['id'] ? 'selected' : ''; ?>>
+                                        <?php echo htmlspecialchars($class['name'] . ' - ' . $class['grade']); ?>
+                                        <?php if ($class['room_no']): ?>
+                                            (Room: <?php echo htmlspecialchars($class['room_no']); ?>)
+                                        <?php endif; ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div id="studentListContainer">
+                        <?php if (!empty($selected_class_students)): ?>
+                            <div class="alert alert-info">
+                                <i class="bi bi-info-circle me-2"></i>
+                                Showing <?php echo count($selected_class_students); ?> active students in this class.
+                                <small class="d-block text-muted mt-1">
+                                    <?php if ($search_date): ?>
+                                        Date: <?php echo date('d M Y', strtotime($search_date)); ?>
+                                    <?php endif; ?>
+                                </small>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>#</th>
+                                            <th>Student</th>
+                                            <th>Status</th>
+                                            <th>Remarks</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach ($selected_class_students as $index => $student): 
+                                            $current_status = $student['attendance_status'] ?? 'Not Marked';
+                                            $current_remarks = $student['attendance_remarks'] ?? '';
+                                        ?>
+                                            <tr>
+                                                <td><?php echo $index + 1; ?></td>
+                                                <td>
+                                                    <?php echo htmlspecialchars($student['first_name'] . ' ' . $student['last_name']); ?>
+                                                    <br><small class="text-muted"><?php echo htmlspecialchars($student['student_uid']); ?></small>
+                                                </td>
+                                                <td>
+                                                    <input type="hidden" name="status[<?php echo $student['id']; ?>]" id="status_<?php echo $student['id']; ?>" value="<?php echo $current_status != 'Not Marked' ? $current_status : ''; ?>">
+                                                    <div class="btn-group btn-group-sm" role="group">
+                                                        <button type="button" class="btn btn-outline-success <?php echo $current_status == 'Present' ? 'active' : ''; ?>" 
+                                                                onclick="selectStatus(this, 'Present', <?php echo $student['id']; ?>)">
+                                                            <i class="bi bi-check"></i> Present
+                                                        </button>
+                                                        <button type="button" class="btn btn-outline-danger <?php echo $current_status == 'Absent' ? 'active' : ''; ?>" 
+                                                                onclick="selectStatus(this, 'Absent', <?php echo $student['id']; ?>)">
+                                                            <i class="bi bi-x"></i> Absent
+                                                        </button>
+                                                        <button type="button" class="btn btn-outline-warning <?php echo $current_status == 'Late' ? 'active' : ''; ?>" 
+                                                                onclick="selectStatus(this, 'Late', <?php echo $student['id']; ?>)">
+                                                            <i class="bi bi-clock"></i> Late
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <input type="text" name="remarks[<?php echo $student['id']; ?>]" class="form-control form-control-sm" 
+                                                           placeholder="Optional remark" value="<?php echo htmlspecialchars($current_remarks); ?>">
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        <?php else: ?>
+                            <div class="text-center py-4">
+                                <i class="bi bi-people fs-1 d-block text-muted"></i>
+                                <p class="text-muted">Select a class to view students and mark attendance</p>
+                                <?php if (empty($classes)): ?>
+                                    <p class="text-danger small">No classes assigned to you. Please contact administrator.</p>
+                                <?php endif; ?>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" name="mark_attendance" class="btn btn-primary" <?php echo empty($selected_class_students) ? 'disabled' : ''; ?>>
+                        <i class="bi bi-check2-all"></i> Save Attendance
+                    </button>
+                </div>
+            </form>
         </div>
-      </section>
+    </div>
+</div>
 
-      <!-- DETAILED RECORD -->
-      <section class="mt-4 rise">
-        <div class="card lift">
-          <div class="card-head">
-            <h3>Attendance Record <span class="sub">Most recent entries first</span></h3>
-            <span class="pill p-teal"><i class="bi bi-funnel"></i> Term 1 · All classes</span>
-          </div>
-          <div class="table-responsive">
-            <table class="table" id="attendanceTable">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Class</th>
-                  <th>Status</th>
-                  <th>Remarks</th>
-                </tr>
-              </thead>
-              <tbody>
-                <?php if (count($recent_records) > 0): ?>
-                  <?php foreach ($recent_records as $record):
-                    $status_badge = getStatusBadge($record['status']);
-                    $status_label = getStatusLabel($record['status']);
-                    ?>
-                    <tr>
-                      <td class="t-strong"><?php echo date('M d, Y', strtotime($record['attendance_date'])); ?></td>
-                      <td><?php echo htmlspecialchars($record['subject_title'] ?? 'N/A'); ?></td>
-                      <td><span class="pill <?php echo $status_badge; ?>"><?php echo $status_label; ?></span></td>
-                      <td><?php echo htmlspecialchars($record['remarks'] ?? '—'); ?></td>
-                    </tr>
-                  <?php endforeach; ?>
-                <?php else: ?>
-                  <tr>
-                    <td colspan="4" class="text-center py-3 text-muted">No attendance records found</td>
-                  </tr>
-                <?php endif; ?>
-              </tbody>
-            </table>
-          </div>
-          <div class="card-body d-flex flex-wrap gap-2 justify-content-between align-items-center">
-            <span style="font-size:.78rem;color:var(--muted)">Showing <?php echo min(count($recent_records), 12); ?> of
-              <?php echo $attendance_stats['total_classes']; ?> attendance records for Term 1.</span>
-            <span class="d-flex gap-2">
-              <a href="messages.php" class="btn-outline"><i class="bi bi-envelope-plus"></i> Apply for Leave</a>
-              <a href="results.php" class="btn-solid"><i class="bi bi-file-earmark-text"></i> Request Report</a>
-            </span>
-          </div>
-        </div>
-      </section>
-
-    </main>
-
-    <footer class="page-foot">
-      <span>&copy; 2026 Crescent Public School · Student Portal</span>
-      <span class="d-flex gap-3"><a href="notices.php">Help Centre</a><a href="messages.php">Contact Office</a><a
-          href="settings.php">Privacy</a></span>
-    </footer>
-  </div>
-
-  <script>
-    // Search functionality for attendance records
-    document.getElementById('attendanceSearch')?.addEventListener('keyup', function () {
-      const searchTerm = this.value.toLowerCase();
-      const rows = document.querySelectorAll('#attendanceTable tbody tr');
-      let visibleCount = 0;
-
-      rows.forEach(row => {
-        const text = row.textContent.toLowerCase();
-        const matches = text.includes(searchTerm);
-
-        if (searchTerm.length > 0) {
-          row.style.display = matches ? '' : 'none';
-          if (matches) visibleCount++;
-        } else {
-          row.style.display = '';
-          visibleCount++;
+<script>
+    // Function to select attendance status
+    function selectStatus(btn, status, studentId) {
+        const btnGroup = btn.closest('.btn-group');
+        btnGroup.querySelectorAll('.btn').forEach(b => {
+            b.classList.remove('active');
+        });
+        btn.classList.add('active');
+        
+        const hiddenInput = document.getElementById('status_' + studentId);
+        if (hiddenInput) {
+            hiddenInput.value = status;
         }
-      });
+    }
 
-      // Show/hide no results message
-      let noResults = document.getElementById('noResultsMsg');
-      if (visibleCount === 0 && searchTerm.length > 0) {
-        const table = document.querySelector('#attendanceTable');
-        if (!noResults) {
-          noResults = document.createElement('div');
-          noResults.id = 'noResultsMsg';
-          noResults.className = 'text-center py-4 text-muted';
-          noResults.innerHTML = `
-                    <i class="bi bi-search fs-1 d-block mb-3"></i>
-                    <h5>No records found</h5>
-                    <p>Try adjusting your search terms</p>
-                `;
-          table.parentNode.appendChild(noResults);
+    // Load students when class is selected in modal
+    document.getElementById('classSelect')?.addEventListener('change', function() {
+        const classId = this.value;
+        if (classId) {
+            const dateInput = document.querySelector('input[name="attendance_date"]');
+            const date = dateInput ? dateInput.value : '<?php echo date('Y-m-d'); ?>';
+            
+            const currentUrl = new URL(window.location.href);
+            currentUrl.searchParams.set('class', classId);
+            currentUrl.searchParams.set('date', date);
+            window.location.href = currentUrl.toString();
         }
-        noResults.style.display = '';
-      } else if (noResults) {
-        noResults.style.display = 'none';
-      }
     });
-  </script>
 
+    // Auto-open modal if class is selected
+    document.addEventListener('DOMContentLoaded', function() {
+        const recordsCount = <?php echo $total_records; ?>;
+        const hasClasses = <?php echo count($classes) > 0 ? 'true' : 'false'; ?>;
+        
+        if (recordsCount === 0 && hasClasses) {
+            // Show a subtle hint to mark attendance
+            const alertHtml = `
+                <div class="alert alert-info alert-dismissible fade show" role="alert">
+                    <i class="bi bi-info-circle me-2"></i>
+                    No attendance records found. Click the <strong>"Mark Attendance"</strong> button to record attendance.
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `;
+            const statsRow = document.querySelector('.row.g-3.mb-4');
+            if (statsRow) {
+                statsRow.insertAdjacentHTML('afterend', alertHtml);
+            }
+        }
+    });
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
-
 </html>

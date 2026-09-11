@@ -1,788 +1,874 @@
 <?php
-declare(strict_types=1);
+// students.php
+require_once '../database/connect.php';
 
-/**
- * Students Directory Page for EduPulse SMS
- * 
- * Main page for managing students. Connects the existing frontend
- * with the PHP OOP backend.
- */
+// Get the current logged-in teacher ID
+session_start();
+$teacher_id = $_SESSION['teacher_id'] ?? 10; // Default to teacher ID 10 for demo
 
-// Bootstrap the application
-require_once __DIR__ . '/config/bootstrap.php';
+// Get filter parameters
+$search = $_GET['search'] ?? '';
+$class_filter = $_GET['class'] ?? '';
+$status_filter = $_GET['status'] ?? '';
 
-use EduPulse\Helpers\Auth;
-use EduPulse\Helpers\Csrf;
-use EduPulse\Helpers\Response;
+// Build the query to get students with their class, teacher, and parent info
+$query = "
+    SELECT 
+        s.id,
+        s.student_uid,
+        s.first_name,
+        s.last_name,
+        s.gender,
+        s.email,
+        s.status as student_status,
+        s.class_id,
+        s.admission_date,
+        s.date_of_birth,
+        s.address,
+        s.photo_url,
+        c.id as class_id,
+        c.name as class_name,
+        c.grade as class_grade,
+        c.room_no,
+        c.description as class_description,
+        t.id as teacher_id,
+        t.full_name as teacher_name,
+        t.phone as teacher_phone,
+        p.id as parent_id,
+        p.full_name as parent_name,
+        p.relation as parent_relation,
+        p.phone as parent_phone,
+        p.email as parent_email,
+        p.address as parent_address,
+        (SELECT COUNT(*) FROM attendance a WHERE a.student_id = s.id) as total_attendance,
+        (SELECT COUNT(*) FROM attendance a WHERE a.student_id = s.id AND a.status = 'Present') as present_attendance,
+        (SELECT COUNT(*) FROM attendance a WHERE a.student_id = s.id AND a.status = 'Absent') as absent_attendance,
+        (SELECT COUNT(*) FROM attendance a WHERE a.student_id = s.id AND a.status = 'Late') as late_attendance
+    FROM students s
+    LEFT JOIN classes c ON s.class_id = c.id
+    LEFT JOIN teachers t ON c.teacher_id = t.id
+    LEFT JOIN parents p ON s.id = p.student_id
+    WHERE 1=1
+";
 
-// Require admin authentication
-Auth::requireAdmin();
+// Add filters
+if (!empty($search)) {
+  $query .= " AND (s.first_name LIKE :search OR s.last_name LIKE :search OR s.student_uid LIKE :search OR s.email LIKE :search)";
+}
 
-// Get current user info
-$currentUser = [
-  'name' => Auth::name() ?: 'Admin',
-  'role' => Auth::role() ?: 'admin'
+if (!empty($class_filter)) {
+  $query .= " AND s.class_id = :class_id";
+}
+
+if (!empty($status_filter)) {
+  $query .= " AND s.status = :status";
+}
+
+// For teacher, only show students in their classes
+$query .= " AND c.teacher_id = :teacher_id";
+
+$query .= " ORDER BY s.first_name ASC, s.last_name ASC";
+
+$stmt = $conn->prepare($query);
+
+// Bind parameters
+if (!empty($search)) {
+  $stmt->bindValue(':search', '%' . $search . '%');
+}
+
+if (!empty($class_filter)) {
+  $stmt->bindValue(':class_id', $class_filter);
+}
+
+if (!empty($status_filter)) {
+  $stmt->bindValue(':status', $status_filter);
+}
+
+$stmt->bindValue(':teacher_id', $teacher_id);
+
+$stmt->execute();
+$students = $stmt->fetchAll();
+
+// Get total counts for stats
+$total_students = count($students);
+$male_count = 0;
+$female_count = 0;
+$total_attendance_percentage = 0;
+
+foreach ($students as $student) {
+  if ($student['gender'] == 'Male')
+    $male_count++;
+  if ($student['gender'] == 'Female')
+    $female_count++;
+
+  // Calculate attendance percentage
+  if ($student['total_attendance'] > 0) {
+    $attendance_percent = ($student['present_attendance'] / $student['total_attendance']) * 100;
+    $total_attendance_percentage += $attendance_percent;
+  }
+}
+
+$average_attendance = $total_students > 0 ? round($total_attendance_percentage / $total_students) : 0;
+
+// Get classes for filter dropdown
+$class_stmt = $conn->prepare("
+    SELECT DISTINCT c.id, c.name, c.grade, c.room_no 
+    FROM classes c 
+    WHERE c.teacher_id = :teacher_id AND c.status = 'active'
+    ORDER BY c.name
+");
+$class_stmt->bindValue(':teacher_id', $teacher_id);
+$class_stmt->execute();
+$classes = $class_stmt->fetchAll();
+
+// Get pagination
+$page = isset($_GET['page']) ? (int) $_GET['page'] : 1;
+$per_page = 10;
+$offset = ($page - 1) * $per_page;
+$total_pages = ceil($total_students / $per_page);
+$paginated_students = array_slice($students, $offset, $per_page);
+
+// Get parent relation mapping
+$relation_map = [
+  1 => 'Father',
+  2 => 'Mother',
+  3 => 'Guardian',
+  4 => 'Grandfather',
+  5 => 'Grandmother',
+  6 => 'Uncle',
+  7 => 'Aunt',
+  8 => 'Sibling',
+  9 => 'Other'
 ];
 
-// Get classes for dropdown
-$classModel = new \EduPulse\Models\ClassModel(getDB());
-$classes = $classModel->getAllActive();
+// Function to get status badge class
+function getStatusBadgeClass($status)
+{
+  switch ($status) {
+    case 'Active':
+      return 'bg-success';
+    case 'Inactive':
+      return 'bg-danger';
+    case 'Pending Doc':
+      return 'bg-warning text-dark';
+    default:
+      return 'bg-secondary';
+  }
+}
 
-// Generate CSRF token
-$csrfToken = Csrf::getToken();
-
-// Get flash message if any
-$flash = Response::getFlash();
+// Function to get relation text
+function getRelationText($relation_code, $relation_map)
+{
+  return $relation_map[$relation_code] ?? 'Unknown';
+}
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Students Directory - EduPulse School Management System</title>
-  <!-- Google Fonts -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap"
-    rel="stylesheet">
-  <!-- Bootstrap 5.3.3 CSS -->
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>My Students | Teacher Dashboard</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <!-- Bootstrap Icons -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-  <!-- Custom Styles -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
+  <style>
+    .student-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      color: white;
+    }
+
+    .student-avatar-sm {
+      width: 32px;
+      height: 32px;
+      font-size: 12px;
+    }
+
+    .bg-grad-1 {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+
+    .bg-grad-2 {
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    }
+
+    .bg-grad-3 {
+      background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    }
+
+    .bg-grad-4 {
+      background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+    }
+
+    .bg-grad-5 {
+      background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+    }
+
+    .parent-info-card {
+      background: #f8f9fa;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 0.85rem;
+    }
+
+    .class-badge {
+      background: #e9ecef;
+      padding: 2px 10px;
+      border-radius: 12px;
+      font-size: 0.8rem;
+      font-weight: 500;
+    }
+
+    .student-row:hover {
+      background-color: #f8f9fa;
+    }
+
+    .detail-icon {
+      font-size: 0.9rem;
+      margin-right: 4px;
+      opacity: 0.7;
+    }
+
+    .expand-btn {
+      cursor: pointer;
+      transition: transform 0.3s;
+    }
+
+    .expand-btn.expanded {
+      transform: rotate(180deg);
+    }
+
+    .detail-row {
+      display: none;
+      background-color: #f8f9fa;
+    }
+
+    .detail-row.show {
+      display: table-row;
+    }
+
+    .detail-label {
+      font-weight: 600;
+      color: #495057;
+      min-width: 120px;
+      display: inline-block;
+    }
+
+    .info-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 15px;
+      padding: 10px 0;
+    }
+
+    .info-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .info-item i {
+      color: #6c757d;
+      width: 20px;
+    }
+
+    @media (max-width: 768px) {
+      .info-grid {
+        grid-template-columns: 1fr;
+        gap: 8px;
+      }
+    }
+
+    .table-responsive {
+      overflow-x: auto;
+    }
+
+    .table td,
+    .table th {
+      vertical-align: middle;
+    }
+  </style>
 </head>
 
 <body>
-  <div class="sidebar-backdrop"></div>
-
-  <div class="app-wrapper">
-    <!-- LEFT SIDEBAR -->
-    <aside class="app-sidebar">
-      <div class="sidebar-header">
-        <a href="index.php" class="brand-logo">
-          <div class="brand-icon"><i class="bi bi-mortarboard-fill"></i></div>
-          <span class="brand-text">EduPulse <small class="fw-normal text-muted fs-6">SMS</small></span>
-        </a>
+  <input type="checkbox" id="tdSidebarToggle">
+  <div class="td-wrapper">
+    <label for="tdSidebarToggle" class="td-overlay"></label>
+    <aside class="td-sidebar">
+      <div class="td-brand"><i class="bi bi-mortarboard-fill"></i><span>Bright Future<small>School Portal</small></span>
       </div>
-
-      <div class="sidebar-nav">
-        <div class="nav-section-title">Main</div>
-        <ul class="sidebar-menu">
-          <li class="nav-item">
-            <a href="index.php" class="nav-link">
-              <i class="bi bi-grid-1x2-fill"></i>
-              <span class="nav-text">Dashboard</span>
-            </a>
-          </li>
-        </ul>
-
-        <div class="nav-section-title">Academics</div>
-        <ul class="sidebar-menu">
-          <li class="nav-item">
-            <a href="students.php" class="nav-link active">
-              <i class="bi bi-people-fill"></i>
-              <span class="nav-text">Students</span>
-            </a>
-          </li>
-          <li class="nav-item">
-            <a href="teachers.php" class="nav-link">
-              <i class="bi bi-person-video3"></i>
-              <span class="nav-text">Teachers</span>
-            </a>
-          </li>
-          <li class="nav-item">
-            <a href="parents.php" class="nav-link">
-              <i class="bi bi-person-heart"></i>
-              <span class="nav-text">Parents</span>
-            </a>
-          </li>
-          <li class="nav-item">
-            <a href="classes.php" class="nav-link">
-              <i class="bi bi-door-open-fill"></i>
-              <span class="nav-text">Classes</span>
-            </a>
-          </li>
-          <li class="nav-item">
-            <a href="subjects.php" class="nav-link">
-              <i class="bi bi-book-half"></i>
-              <span class="nav-text">Subjects</span>
-            </a>
-          </li>
-          <li class="nav-item">
-            <a href="timetable.php" class="nav-link">
-              <i class="bi bi-calendar3-range"></i>
-              <span class="nav-text">Timetable</span>
-            </a>
-          </li>
-          <li class="nav-item">
-            <a href="assignments.php" class="nav-link">
-              <i class="bi bi-journal-check"></i>
-              <span class="nav-text">Assignments</span>
-            </a>
-          </li>
-        </ul>
-
-        <div class="nav-section-title">Operations</div>
-        <ul class="sidebar-menu">
-          <li class="nav-item">
-            <a href="attendance.php" class="nav-link">
-              <i class="bi bi-check2-square"></i>
-              <span class="nav-text">Attendance</span>
-            </a>
-          </li>
-          <li class="nav-item">
-            <a href="exams.php" class="nav-link">
-              <i class="bi bi-pencil-square"></i>
-              <span class="nav-text">Exams</span>
-            </a>
-          </li>
-          <li class="nav-item">
-            <a href="results.php" class="nav-link">
-              <i class="bi bi-trophy-fill"></i>
-              <span class="nav-text">Results</span>
-            </a>
-          </li>
-          <li class="nav-item">
-            <a href="fees.php" class="nav-link">
-              <i class="bi bi-cash-stack"></i>
-              <span class="nav-text">Fees</span>
-            </a>
-          </li>
-        </ul>
-
-        <div class="nav-section-title">Communication</div>
-        <ul class="sidebar-menu">
-          <li class="nav-item">
-            <a href="notices.php" class="nav-link">
-              <i class="bi bi-megaphone-fill"></i>
-              <span class="nav-text">Notices</span>
-            </a>
-          </li>
-          <li class="nav-item">
-            <a href="events.php" class="nav-link">
-              <i class="bi bi-calendar-event-fill"></i>
-              <span class="nav-text">Events</span>
-            </a>
-          </li>
-          <li class="nav-item">
-            <a href="messages.php" class="nav-link">
-              <i class="bi bi-chat-dots-fill"></i>
-              <span class="nav-text">Messages</span>
-              <span class="badge bg-danger rounded-pill ms-auto">4</span>
-            </a>
-          </li>
-        </ul>
-
-        <div class="nav-section-title">System</div>
-        <ul class="sidebar-menu">
-          <li class="nav-item">
-            <a href="reports.php" class="nav-link">
-              <i class="bi bi-bar-chart-line-fill"></i>
-              <span class="nav-text">Reports</span>
-            </a>
-          </li>
-          <li class="nav-item">
-            <a href="profile.php" class="nav-link">
-              <i class="bi bi-person-circle"></i>
-              <span class="nav-text">Profile</span>
-            </a>
-          </li>
-          <li class="nav-item">
-            <a href="settings.php" class="nav-link">
-              <i class="bi bi-gear-fill"></i>
-              <span class="nav-text">Settings</span>
-            </a>
-          </li>
-          <li class="nav-item">
-            <a href="#" class="nav-link text-danger" data-bs-toggle="modal" data-bs-target="#logoutModal">
-              <i class="bi bi-box-arrow-right text-danger"></i>
-              <span class="nav-text">Logout</span>
-            </a>
-          </li>
-        </ul>
-      </div>
-
-      <div class="sidebar-footer">
-        <div class="user-quick-info">
-          <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80"
-            alt="Admin" class="user-avatar-sm">
-          <div class="user-details overflow-hidden">
-            <div class="text-white fw-bold text-truncate" style="font-size: 0.85rem;">
-              <?php echo escape($currentUser['name']); ?>
-            </div>
-            <div class="text-muted text-truncate" style="font-size: 0.75rem;">
-              <?php echo escape(ucfirst($currentUser['role'])); ?>
-            </div>
-          </div>
+      <div class="td-teacher-box">
+        <div class="td-avatar">MA</div>
+        <div>
+          <h6>Mr. Ahmed</h6>
+          <p>Mathematics Teacher</p>
         </div>
       </div>
+      <nav class="td-nav">
+        <div class="td-nav-title">Main</div>
+        <a href="index.php"><i class="bi bi-speedometer2"></i> Dashboard</a>
+        <a href="students.php" class="active"><i class="bi bi-people"></i> My Students</a>
+        <a href="attendance.php"><i class="bi bi-calendar2-check"></i> Attendance</a>
+        <a href="subjects.php"><i class="bi bi-journal-bookmark"></i> My Subjects</a>
+        <a href="timetable.php"><i class="bi bi-clock-history"></i> My Timetable</a>
+        <div class="td-nav-title">Academics</div>
+        <a href="assignments.php"><i class="bi bi-file-earmark-text"></i> Assignments</a>
+        <a href="exams.php"><i class="bi bi-pencil-square"></i> Exams</a>
+        <a href="results.php"><i class="bi bi-bar-chart-line"></i> Results</a>
+        <div class="td-nav-title">Communication</div>
+        <a href="notices.php"><i class="bi bi-megaphone"></i> Notices</a>
+        <a href="messages.php"><i class="bi bi-chat-dots"></i> Messages</a>
+        <div class="td-nav-title">Account</div>
+        <a href="profile.php"><i class="bi bi-person-badge"></i> My Profile</a>
+        <a href="settings.php"><i class="bi bi-gear"></i> Settings</a>
+        <a href="#" class="logout"><i class="bi bi-box-arrow-right"></i> Logout</a>
+      </nav>
     </aside>
-
-    <!-- MAIN CONTENT AREA -->
-    <div class="app-main">
-      <header class="app-topbar">
-        <div class="topbar-left">
-          <button type="button" class="sidebar-toggle-btn" id="sidebarToggleBtn" aria-label="Toggle Sidebar">
-            <i class="bi bi-list"></i>
-          </button>
-          <div class="search-input-group">
-            <i class="bi bi-search search-icon"></i>
-            <input type="text" class="form-control" placeholder="Search anything... (Ctrl + K)">
-          </div>
-        </div>
-
-        <div class="topbar-right">
-          <!-- Notification Dropdown -->
-          <div class="dropdown">
-            <button class="topbar-btn" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-              <i class="bi bi-bell"></i>
-              <span class="notification-badge"></span>
-            </button>
-            <div class="dropdown-menu dropdown-menu-end shadow border-0 p-0" style="width: 320px;">
-              <div class="p-3 border-bottom d-flex justify-content-between align-items-center">
-                <h6 class="m-0 fw-bold">Notifications</h6>
-                <span class="badge bg-primary-subtle text-primary">3 New</span>
-              </div>
-              <div class="list-group list-group-flush">
-                <a href="students.php" class="list-group-item list-group-item-action p-3">
-                  <div class="small fw-bold">New Student Enrolled</div>
-                  <small class="text-muted">A new student joined the school</small>
-                </a>
-              </div>
-            </div>
-          </div>
-
-          <!-- User Dropdown -->
-          <div class="dropdown">
-            <a href="#" class="user-dropdown-btn dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
-              <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80"
-                alt="Admin">
-              <div class="user-meta">
-                <span class="user-name"><?php echo escape($currentUser['name']); ?></span>
-                <span class="user-role"><?php echo escape(ucfirst($currentUser['role'])); ?></span>
-              </div>
-            </a>
-            <ul class="dropdown-menu dropdown-menu-end shadow border-0 mt-2">
-              <li><a class="dropdown-item py-2" href="profile.php"><i class="bi bi-person me-2"></i> My Profile</a></li>
-              <li><a class="dropdown-item py-2" href="settings.php"><i class="bi bi-gear me-2"></i> Settings</a></li>
-              <li>
-                <hr class="dropdown-divider">
-              </li>
-              <li><a class="dropdown-item py-2 text-danger" href="#" data-bs-toggle="modal"
-                  data-bs-target="#logoutModal"><i class="bi bi-box-arrow-right me-2"></i> Logout</a></li>
-            </ul>
-          </div>
-        </div>
-      </header>
-
-      <main class="app-content">
-        <!-- Page Header -->
-        <div class="page-header d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-3">
-          <div>
-            <h1 class="page-title">Students Directory</h1>
-            <nav aria-label="breadcrumb">
-              <ol class="breadcrumb">
-                <li class="breadcrumb-item"><a href="index.php">Dashboard</a></li>
-                <li class="breadcrumb-item active" aria-current="page">Students</li>
-              </ol>
-            </nav>
-          </div>
-          <div class="d-flex gap-2">
-            <button type="button" class="btn btn-outline-secondary btn-sm" id="btnExport">
-              <i class="bi bi-download me-1"></i> Export
-            </button>
-            <button type="button" class="btn btn-primary btn-sm d-inline-flex align-items-center gap-2"
-              data-bs-toggle="modal" data-bs-target="#addStudentModal">
-              <i class="bi bi-person-plus-fill"></i> Add Student
-            </button>
-          </div>
-        </div>
-
-        <!-- Filter & Search Toolbar -->
-        <div class="filter-card">
-          <div class="row g-3 align-items-center">
-            <div class="col-md-4">
-              <div class="input-group">
-                <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
-                <input type="text" class="form-control border-start-0 ps-0" id="searchInput"
-                  placeholder="Search by name, ID, email...">
-              </div>
-            </div>
-            <div class="col-sm-6 col-md-2">
-              <select class="form-select" id="filterClass">
-                <option value="">All Classes</option>
-                <?php foreach ($classes as $class): ?>
-                  <option value="<?php echo (int) $class['id']; ?>"><?php echo escape($class['name']); ?></option>
-                <?php endforeach; ?>
-              </select>
-            </div>
-            <div class="col-sm-6 col-md-2">
-              <select class="form-select" id="filterGender">
-                <option value="">All Genders</option>
-                <option value="Male">Male</option>
-                <option value="Female">Female</option>
-                <option value="Other">Other</option>
-              </select>
-            </div>
-            <div class="col-sm-6 col-md-2">
-              <select class="form-select" id="filterStatus">
-                <option value="">All Statuses</option>
-                <option value="Active">Active</option>
-                <option value="Pending Doc">Pending Doc</option>
-                <option value="Inactive">Inactive</option>
-              </select>
-            </div>
-            <div class="col-sm-6 col-md-2">
-              <button type="button" class="btn btn-outline-secondary w-100" id="btnResetFilters">
-                <i class="bi bi-arrow-counterclockwise me-1"></i> Reset
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Student Table Card -->
-        <div class="card">
-          <div class="card-header d-flex justify-content-between align-items-center">
-            <span class="fw-bold" id="recordCount">All Students</span>
-            <small class="text-muted" id="paginationInfo">Loading...</small>
-          </div>
-          <div class="table-responsive">
-            <table class="table table-custom align-middle" id="studentsTable">
-              <thead>
-                <tr>
-                  <th>Student ID</th>
-                  <th>Student Name</th>
-                  <th>Gender</th>
-                  <th>Class</th>
-                  <th>Email</th>
-                  <th>Status</th>
-                  <th class="text-end">Actions</th>
-                </tr>
-              </thead>
-              <tbody id="studentsTableBody">
-                <tr>
-                  <td colspan="7" class="text-center py-4">
-                    <div class="spinner-border text-primary" role="status">
-                      <span class="visually-hidden">Loading...</span>
-                    </div>
-                    <p class="mt-2 text-muted">Loading students...</p>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          <!-- Pagination -->
-          <div class="card-footer" id="paginationContainer">
-            <nav aria-label="Students pagination">
-              <ul class="pagination justify-content-center mb-0" id="paginationList">
-                <!-- Pagination will be populated by JavaScript -->
-              </ul>
-            </nav>
-          </div>
-        </div>
-      </main>
-
-      <footer class="app-footer">
-        <div>© 2026 <strong>EduPulse Academy</strong> - All rights reserved.</div>
-        <div class="d-none d-sm-block">Version 2.4.0</div>
-      </footer>
-    </div>
-  </div>
-
-  <!-- ADD STUDENT MODAL -->
-  <div class="modal fade" id="addStudentModal" tabindex="-1" aria-labelledby="addStudentModalLabel" aria-hidden="true">
-
-    <div class="modal-dialog modal-lg modal-dialog-centered">
-
-      <div class="modal-content">
-
-        <!-- HEADER -->
-        <div class="modal-header">
-          <h5 class="modal-title" id="addStudentModalLabel">
-            <i class="bi bi-person-plus-fill text-primary me-2"></i>
-            New Student Admission
-          </h5>
-
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close">
-          </button>
-        </div>
-
-        <!-- FORM -->
-        <form id="addStudentForm" enctype="multipart/form-data">
-
-          <input type="hidden" name="csrf_token" value="<?php echo escape($csrfToken); ?>">
-
-          <!-- SCROLLABLE BODY -->
-          <div class="modal-body">
-
-            <div class="row g-3">
-
-              <!-- FIRST NAME -->
-              <div class="col-md-6">
-                <label class="form-label">
-                  First Name <span class="text-danger">*</span>
-                </label>
-
-                <input type="text" class="form-control" name="first_name" required placeholder="e.g. Zayan">
-
-                <div class="invalid-feedback" id="first_name_error">
-                </div>
-              </div>
-
-              <!-- LAST NAME -->
-              <div class="col-md-6">
-                <label class="form-label">
-                  Last Name <span class="text-danger">*</span>
-                </label>
-
-                <input type="text" class="form-control" name="last_name" required placeholder="e.g. Tariq">
-
-                <div class="invalid-feedback" id="last_name_error">
-                </div>
-              </div>
-
-              <!-- GENDER -->
-              <div class="col-md-4">
-                <label class="form-label">
-                  Gender <span class="text-danger">*</span>
-                </label>
-
-                <select class="form-select" name="gender" required>
-
-                  <option value="">Select gender</option>
-                  <option value="Male">Male</option>
-                  <option value="Female">Female</option>
-                  <option value="Other">Other</option>
-
-                </select>
-
-                <div class="invalid-feedback" id="gender_error">
-                </div>
-              </div>
-
-              <!-- DOB -->
-              <div class="col-md-4">
-                <label class="form-label">
-                  Date of Birth <span class="text-danger">*</span>
-                </label>
-
-                <input type="date" class="form-control" name="date_of_birth" required>
-
-                <div class="invalid-feedback" id="date_of_birth_error">
-                </div>
-              </div>
-
-              <!-- CLASS -->
-              <div class="col-md-4">
-                <label class="form-label">
-                  Assign Class
-                </label>
-
-                <select class="form-select" name="class_id">
-
-                  <option value="">
-                    Select class
-                  </option>
-
-                  <?php foreach ($classes as $class): ?>
-
-                    <option value="<?php echo (int) $class['id']; ?>">
-                      <?php echo escape($class['name']); ?>
-                    </option>
-
-                  <?php endforeach; ?>
-
-                </select>
-              </div>
-
-              <!-- EMAIL -->
-              <div class="col-md-6">
-                <label class="form-label">
-                  Email Address <span class="text-danger">*</span>
-                </label>
-
-                <input type="email" class="form-control" name="email" required placeholder="student@example.com">
-
-                <div class="invalid-feedback" id="email_error">
-                </div>
-              </div>
-
-              <!-- PASSWORD -->
-              <div class="col-md-6">
-                <label class="form-label">
-                  Password <span class="text-danger">*</span>
-                </label>
-
-                <input type="password" class="form-control" name="password" required minlength="8"
-                  placeholder="Min. 8 characters">
-
-                <div class="invalid-feedback" id="password_error">
-                </div>
-              </div>
-
-              <!-- ADMISSION DATE -->
-              <div class="col-md-6">
-                <label class="form-label">
-                  Admission Date <span class="text-danger">*</span>
-                </label>
-
-                <input type="date" class="form-control" name="admission_date" required
-                  value="<?php echo date('Y-m-d'); ?>">
-
-                <div class="invalid-feedback" id="admission_date_error">
-                </div>
-              </div>
-
-              <!-- STATUS -->
-              <div class="col-md-6">
-                <label class="form-label">
-                  Enrollment Status
-                </label>
-
-                <select class="form-select" name="status">
-
-                  <option value="Active">
-                    Active
-                  </option>
-
-                  <option value="Pending Doc">
-                    Pending Documents
-                  </option>
-
-                  <option value="Inactive">
-                    Inactive
-                  </option>
-
-                </select>
-              </div>
-
-              <!-- ADDRESS -->
-              <div class="col-12">
-                <label class="form-label">
-                  Residential Address
-                </label>
-
-                <textarea class="form-control" name="address" rows="3"
-                  placeholder="Street address, city, zip code"></textarea>
-              </div>
-
-              <!-- PHOTO -->
-              <div class="col-12">
-                <label class="form-label">
-                  Student Photo
-                </label>
-
-                <input type="file" class="form-control" name="photo" accept=".jpg,.jpeg,.png,.webp">
-
-                <small class="text-muted">
-                  Allowed: JPG, PNG, WebP. Max size: 5MB
-                </small>
-
-                <div class="invalid-feedback" id="photo_error">
-                </div>
-              </div>
-
-            </div>
-
-          </div>
-
-          <!-- FOOTER -->
-          <div class="modal-footer">
-
-            <button type="button" class="btn btn-light" data-bs-dismiss="modal">
-              Cancel
-            </button>
-
-            <button type="submit" class="btn btn-primary" id="btnAddStudent">
-
-              <i class="bi bi-check-lg me-1"></i>
-              Register Student
-
-            </button>
-
-          </div>
-
-        </form>
-
-      </div>
-    </div>
-  </div>
-
-  <!-- EDIT STUDENT MODAL -->
-  <div class="modal fade" id="editStudentModal" tabindex="-1" aria-labelledby="editStudentModalLabel"
-    aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title" id="editStudentModalLabel"><i class="bi bi-pencil-square text-primary me-2"></i>Edit
-            Student Profile</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
-        <form id="editStudentForm" enctype="multipart/form-data">
-          <input type="hidden" name="csrf_token" value="<?php echo escape($csrfToken); ?>">
-          <input type="hidden" name="id" id="edit_student_id">
-          <div class="modal-body">
-            <div class="row g-3">
-              <div class="col-md-6">
-                <label class="form-label">First Name <span class="text-danger">*</span></label>
-                <input type="text" class="form-control" name="first_name" id="edit_first_name" required>
-                <div class="invalid-feedback" id="edit_first_name_error"></div>
-              </div>
-              <div class="col-md-6">
-                <label class="form-label">Last Name <span class="text-danger">*</span></label>
-                <input type="text" class="form-control" name="last_name" id="edit_last_name" required>
-                <div class="invalid-feedback" id="edit_last_name_error"></div>
-              </div>
-              <div class="col-md-4">
-                <label class="form-label">Gender <span class="text-danger">*</span></label>
-                <select class="form-select" name="gender" id="edit_gender" required>
-                  <option value="Male">Male</option>
-                  <option value="Female">Female</option>
-                  <option value="Other">Other</option>
-                </select>
-              </div>
-              <div class="col-md-4">
-                <label class="form-label">Date of Birth <span class="text-danger">*</span></label>
-                <input type="date" class="form-control" name="date_of_birth" id="edit_date_of_birth" required>
-              </div>
-              <div class="col-md-4">
-                <label class="form-label">Class</label>
-                <select class="form-select" name="class_id" id="edit_class_id">
-                  <option value="">Select class</option>
-                  <?php foreach ($classes as $class): ?>
-                    <option value="<?php echo (int) $class['id']; ?>"><?php echo escape($class['name']); ?></option>
-                  <?php endforeach; ?>
-                </select>
-              </div>
-              <div class="col-md-6">
-                <label class="form-label">Email <span class="text-danger">*</span></label>
-                <input type="email" class="form-control" name="email" id="edit_email" required>
-              </div>
-              <div class="col-md-6">
-                <label class="form-label">New Password <span class="text-muted">(leave blank to keep
-                    current)</span></label>
-                <input type="password" class="form-control" name="password" minlength="8"
-                  placeholder="Min. 8 characters">
-              </div>
-              <div class="col-md-6">
-                <label class="form-label">Status</label>
-                <select class="form-select" name="status" id="edit_status">
-                  <option value="Active">Active</option>
-                  <option value="Pending Doc">Pending Doc</option>
-                  <option value="Inactive">Inactive</option>
-                </select>
-              </div>
-              <div class="col-md-6">
-                <label class="form-label">Admission Date <span class="text-danger">*</span></label>
-                <input type="date" class="form-control" name="admission_date" id="edit_admission_date" required>
-              </div>
-              <div class="col-12">
-                <label class="form-label">Address</label>
-                <textarea class="form-control" name="address" id="edit_address" rows="2"></textarea>
-              </div>
-              <div class="col-12">
-                <label class="form-label">Photo</label>
-                <input type="file" class="form-control" name="photo" accept=".jpg,.jpeg,.png,.webp">
-                <small class="text-muted">Leave blank to keep current photo</small>
-                <div class="mt-2" id="currentPhotoPreview"></div>
-              </div>
-            </div>
-          </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
-            <button type="submit" class="btn btn-primary" id="btnUpdateStudent">
-              <i class="bi bi-save me-1"></i> Update Changes
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  </div>
-
-  <!-- VIEW STUDENT MODAL -->
-  <div class="modal fade" id="viewStudentModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title">Student Profile Summary</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
-        <div class="modal-body">
-          <div class="text-center pb-3 border-bottom mb-3">
-            <img src="" alt="Student" class="rounded-circle mb-2 border p-1" width="80" height="80" id="view_photo">
-            <h5 class="fw-bold mb-0" id="view_name">Loading...</h5>
-            <span class="badge bg-primary-subtle text-primary" id="view_student_id">Loading...</span>
-            <div class="mt-2"><span class="badge-subtle" id="view_status_badge">Loading...</span></div>
-          </div>
-          <div class="row g-2 small" id="view_details">
-            <!-- Details will be populated by JavaScript -->
-          </div>
-        </div>
-        <div class="modal-footer">
-          <a href="results.php" class="btn btn-sm btn-outline-primary"><i class="bi bi-file-earmark-bar-graph me-1"></i>
-            Academic Result</a>
-          <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Close</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- COMMON DELETE CONFIRMATION MODAL -->
-  <div class="modal fade" id="deleteConfirmModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-sm">
-      <div class="modal-content text-center p-3">
-        <div class="modal-body">
-          <div class="text-danger fs-1 mb-2"><i class="bi bi-exclamation-circle"></i></div>
-          <h5 class="fw-bold">Delete Student?</h5>
-          <p class="text-muted small">Are you sure you want to delete <span class="delete-item-label fw-bold"
-              id="deleteStudentName"></span>? This will also remove their user account. This action cannot be undone.
-          </p>
-          <form id="deleteStudentForm">
-            <input type="hidden" name="csrf_token" value="<?php echo escape($csrfToken); ?>">
-            <input type="hidden" name="id" id="delete_student_id">
-            <div class="d-flex justify-content-center gap-2 mt-3">
-              <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
-              <button type="submit" class="btn btn-danger" id="btnConfirmDelete">Delete</button>
+    <div class="td-main">
+      <header class="td-navbar">
+        <label for="tdSidebarToggle" class="td-burger"><i class="bi bi-list"></i></label>
+        <h1 class="td-page-title">My Students <small>All students assigned to your classes</small></h1>
+        <div class="td-search ms-auto">
+          <form method="GET" action="students.php" class="d-flex">
+            <div class="input-group">
+              <span class="input-group-text bg-white border-end-0"><i class="bi bi-search"></i></span>
+              <input type="search" name="search" class="form-control border-start-0"
+                placeholder="Search by name, ID or email..." value="<?php echo htmlspecialchars($search); ?>">
+              <button type="submit" class="btn btn-primary d-none">Search</button>
             </div>
           </form>
         </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- LOGOUT MODAL -->
-  <div class="modal fade" id="logoutModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-sm">
-      <div class="modal-content text-center p-3">
-        <div class="modal-body">
-          <div class="text-danger fs-1 mb-2"><i class="bi bi-box-arrow-right"></i></div>
-          <h5 class="fw-bold">Sign Out</h5>
-          <p class="text-muted small">Are you sure you want to end your current session?</p>
-          <div class="d-flex justify-content-center gap-2 mt-3">
-            <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
-            <a href="logout.php" class="btn btn-danger">Logout</a>
+        <a href="notices.php" class="td-icon-btn"><i class="bi bi-bell"></i><span class="td-dot"></span></a>
+        <a href="profile.php" class="d-flex align-items-center gap-2 text-dark">
+          <span class="td-avatar">MA</span>
+          <span class="d-none d-md-block">
+            <strong class="d-block" style="font-size:.85rem">Mr. Ahmed</strong>
+            <small class="text-muted" style="font-size:.72rem">Mathematics Teacher</small>
+          </span>
+        </a>
+      </header>
+      <main class="td-content">
+        <!-- Statistics Cards -->
+        <div class="row g-3 mb-4">
+          <div class="col-6 col-xl-3">
+            <div class="card stat-card">
+              <div class="stat-icon bg-grad-1"><i class="bi bi-people-fill"></i></div>
+              <div>
+                <h3>
+                  <?php echo $total_students; ?>
+                </h3>
+                <p>Total Students</p>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-xl-3">
+            <div class="card stat-card">
+              <div class="stat-icon bg-grad-2"><i class="bi bi-gender-male"></i></div>
+              <div>
+                <h3>
+                  <?php echo $male_count; ?>
+                </h3>
+                <p>Male Students</p>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-xl-3">
+            <div class="card stat-card">
+              <div class="stat-icon bg-grad-5"><i class="bi bi-gender-female"></i></div>
+              <div>
+                <h3>
+                  <?php echo $female_count; ?>
+                </h3>
+                <p>Female Students</p>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-xl-3">
+            <div class="card stat-card">
+              <div class="stat-icon bg-grad-4"><i class="bi bi-graph-up"></i></div>
+              <div>
+                <h3>
+                  <?php echo $average_attendance; ?>%
+                </h3>
+                <p>Avg. Attendance</p>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
+
+        <!-- Filter Form -->
+        <div class="card mb-4">
+          <div class="card-body">
+            <form method="GET" action="students.php" class="row g-3 align-items-end">
+              <input type="hidden" name="page" value="1">
+              <div class="col-md-4">
+                <label class="form-label">Search Student</label>
+                <input type="search" name="search" class="form-control" placeholder="Name, ID or email"
+                  value="<?php echo htmlspecialchars($search); ?>">
+              </div>
+              <div class="col-md-3">
+                <label class="form-label">Class</label>
+                <select name="class" class="form-select">
+                  <option value="">All Classes</option>
+                  <?php foreach ($classes as $class): ?>
+                    <option value="<?php echo $class['id']; ?>" <?php echo $class_filter == $class['id'] ? 'selected' : ''; ?>>
+                      <?php echo htmlspecialchars($class['name'] . ' - ' . $class['grade']); ?>
+                      <?php if ($class['room_no']): ?>
+                        (Room:
+                        <?php echo htmlspecialchars($class['room_no']); ?>)
+                      <?php endif; ?>
+                    </option>
+                  <?php endforeach; ?>
+                </select>
+              </div>
+              <div class="col-md-3">
+                <label class="form-label">Status</label>
+                <select name="status" class="form-select">
+                  <option value="">All Status</option>
+                  <option value="Active" <?php echo $status_filter == 'Active' ? 'selected' : ''; ?>>Active</option>
+                  <option value="Inactive" <?php echo $status_filter == 'Inactive' ? 'selected' : ''; ?>>Inactive
+                  </option>
+                  <option value="Pending Doc" <?php echo $status_filter == 'Pending Doc' ? 'selected' : ''; ?>>Pending
+                    Doc</option>
+                </select>
+              </div>
+              <div class="col-md-2 d-grid">
+                <button type="submit" class="btn btn-primary"><i class="bi bi-funnel"></i> Filter</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <!-- Student List -->
+        <div class="card">
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-list-ul me-2 text-primary"></i>Student List</span>
+            <div>
+              <button class="btn btn-sm btn-outline-secondary me-1" onclick="expandAll()">
+                <i class="bi bi-arrows-expand"></i> Expand All
+              </button>
+              <a href="#" class="btn btn-sm btn-outline-primary"><i class="bi bi-download"></i> Export</a>
+            </div>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-hover align-middle" id="studentTable">
+              <thead class="table-light">
+                <tr>
+                  <th style="width: 40px;"></th>
+                  <th>Student</th>
+                  <th>Class</th>
+                  <th>Parent/Guardian</th>
+                  <th>Attendance</th>
+                  <th>Status</th>
+                  <th style="width: 60px;">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <?php if (count($paginated_students) > 0): ?>
+                  <?php foreach ($paginated_students as $index => $student):
+                    $attendance_percent = 0;
+                    if ($student['total_attendance'] > 0) {
+                      $attendance_percent = round(($student['present_attendance'] / $student['total_attendance']) * 100);
+                    }
+                    $status_class = getStatusBadgeClass($student['student_status']);
+                    $relation_text = getRelationText($student['parent_relation'], $relation_map);
+                    $avatar_color = ['#667eea', '#f093fb', '#4facfe', '#43e97b', '#fa709a', '#f5576c', '#764ba2', '#00f2fe', '#38f9d7', '#fee140'][$index % 10];
+                    $student_name = htmlspecialchars($student['first_name'] . ' ' . $student['last_name']);
+                    $initials = substr($student['first_name'], 0, 1) . substr($student['last_name'], 0, 1);
+                    ?>
+                    <tr class="student-row">
+                      <td>
+                        <button class="btn btn-sm btn-link text-secondary expand-btn p-0"
+                          onclick="toggleDetails(<?php echo $student['id']; ?>)">
+                          <i class="bi bi-chevron-down"></i>
+                        </button>
+                      </td>
+                      <td>
+                        <div class="d-flex align-items-center gap-2">
+                          <?php if ($student['photo_url']): ?>
+                            <img src="<?php echo htmlspecialchars($student['photo_url']); ?>" alt="Student"
+                              class="rounded-circle" width="32" height="32" style="object-fit: cover;">
+                          <?php else: ?>
+                            <div class="student-avatar student-avatar-sm" style="background: <?php echo $avatar_color; ?>;">
+                              <?php echo strtoupper($initials); ?>
+                            </div>
+                          <?php endif; ?>
+                          <div>
+                            <div class="fw-semibold">
+                              <?php echo $student_name; ?>
+                            </div>
+                            <small class="text-muted">
+                              <?php echo htmlspecialchars($student['student_uid'] ?? 'N/A'); ?>
+                            </small>
+                          </div>
+                        </div>
+                      </td>
+                      <td>
+                        <div>
+                          <span class="class-badge">
+                            <?php echo htmlspecialchars($student['class_name'] ?? 'Not Assigned'); ?>
+                          </span>
+                          <?php if ($student['class_grade']): ?>
+                            <br>
+                            <small class="text-muted">Grade:
+                              <?php echo htmlspecialchars($student['class_grade']); ?>
+                            </small>
+                          <?php endif; ?>
+                        </div>
+                      </td>
+                      <td>
+                        <?php if ($student['parent_name']): ?>
+                          <div>
+                            <div>
+                              <?php echo htmlspecialchars($student['parent_name']); ?>
+                            </div>
+                            <small class="text-muted">
+                              <?php echo htmlspecialchars($relation_text); ?>
+                              <?php if ($student['parent_phone']): ?>
+                                <i class="bi bi-telephone ms-1"></i>
+                                <?php echo htmlspecialchars($student['parent_phone']); ?>
+                              <?php endif; ?>
+                            </small>
+                          </div>
+                        <?php else: ?>
+                          <span class="text-muted small">No parent recorded</span>
+                        <?php endif; ?>
+                      </td>
+                      <td>
+                        <div class="d-flex align-items-center">
+                          <span class="fw-semibold me-2">
+                            <?php echo $attendance_percent; ?>%
+                          </span>
+                          <div class="progress" style="width: 60px; height: 6px;">
+                            <div
+                              class="progress-bar <?php echo $attendance_percent >= 80 ? 'bg-success' : ($attendance_percent >= 60 ? 'bg-warning' : 'bg-danger'); ?>"
+                              style="width: <?php echo $attendance_percent; ?>%"></div>
+                          </div>
+                        </div>
+                      </td>
+                      <td>
+                        <span class="badge <?php echo $status_class; ?>">
+                          <?php echo htmlspecialchars($student['student_status'] ?? 'Unknown'); ?>
+                        </span>
+                      </td>
+                      <td>
+                        <div class="btn-group">
+                          <button class="btn btn-sm btn-outline-primary"
+                            onclick="viewStudent(<?php echo $student['id']; ?>)">
+                            <i class="bi bi-eye"></i>
+                          </button>
+                          <button class="btn btn-sm btn-outline-secondary"
+                            onclick="messageStudent(<?php echo $student['id']; ?>)">
+                            <i class="bi bi-chat"></i>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                    <!-- Detail Row -->
+                    <tr class="detail-row" id="detail_<?php echo $student['id']; ?>">
+                      <td colspan="7">
+                        <div class="p-3">
+                          <div class="row">
+                            <div class="col-md-6">
+                              <h6 class="text-primary mb-3"><i class="bi bi-person-vcard"></i> Student Details</h6>
+                              <div class="info-grid">
+                                <div class="info-item">
+                                  <i class="bi bi-envelope"></i>
+                                  <span>
+                                    <?php echo htmlspecialchars($student['email'] ?? 'N/A'); ?>
+                                  </span>
+                                </div>
+                                <div class="info-item">
+                                  <i class="bi bi-calendar3"></i>
+                                  <span>DOB:
+                                    <?php echo htmlspecialchars($student['date_of_birth'] ?? 'N/A'); ?>
+                                  </span>
+                                </div>
+                                <div class="info-item">
+                                  <i class="bi bi-calendar-check"></i>
+                                  <span>Admission:
+                                    <?php echo htmlspecialchars($student['admission_date'] ?? 'N/A'); ?>
+                                  </span>
+                                </div>
+                                <div class="info-item">
+                                  <i class="bi bi-gender-<?php echo strtolower($student['gender'] ?? ''); ?>"></i>
+                                  <span>
+                                    <?php echo htmlspecialchars($student['gender'] ?? 'N/A'); ?>
+                                  </span>
+                                </div>
+                                <div class="info-item">
+                                  <i class="bi bi-geo-alt"></i>
+                                  <span>
+                                    <?php echo htmlspecialchars($student['address'] ?? 'No address'); ?>
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                            <div class="col-md-6">
+                              <h6 class="text-primary mb-3"><i class="bi bi-people"></i> Class & Teacher Information</h6>
+                              <div class="info-grid">
+                                <div class="info-item">
+                                  <i class="bi bi-building"></i>
+                                  <span>Class:
+                                    <?php echo htmlspecialchars($student['class_name'] ?? 'Not Assigned'); ?>
+                                  </span>
+                                </div>
+                                <div class="info-item">
+                                  <i class="bi bi-book"></i>
+                                  <span>Grade:
+                                    <?php echo htmlspecialchars($student['class_grade'] ?? 'N/A'); ?>
+                                  </span>
+                                </div>
+                                <div class="info-item">
+                                  <i class="bi bi-door-open"></i>
+                                  <span>Room:
+                                    <?php echo htmlspecialchars($student['room_no'] ?? 'N/A'); ?>
+                                  </span>
+                                </div>
+                                <div class="info-item">
+                                  <i class="bi bi-person-badge"></i>
+                                  <span>Teacher:
+                                    <?php echo htmlspecialchars($student['teacher_name'] ?? 'Not Assigned'); ?>
+                                  </span>
+                                </div>
+                                <?php if ($student['teacher_phone']): ?>
+                                  <div class="info-item">
+                                    <i class="bi bi-telephone"></i>
+                                    <span>Teacher Phone:
+                                      <?php echo htmlspecialchars($student['teacher_phone']); ?>
+                                    </span>
+                                  </div>
+                                <?php endif; ?>
+                              </div>
+                            </div>
+                          </div>
+
+                          <?php if ($student['parent_name']): ?>
+                            <hr>
+                            <div class="row">
+                              <div class="col-12">
+                                <h6 class="text-primary mb-3"><i class="bi bi-person-lines-fill"></i> Parent/Guardian Details
+                                </h6>
+                                <div class="info-grid">
+                                  <div class="info-item">
+                                    <i class="bi bi-person"></i>
+                                    <span><strong>Name:</strong>
+                                      <?php echo htmlspecialchars($student['parent_name']); ?>
+                                    </span>
+                                  </div>
+                                  <div class="info-item">
+                                    <i class="bi bi-tag"></i>
+                                    <span><strong>Relation:</strong>
+                                      <?php echo htmlspecialchars($relation_text); ?>
+                                    </span>
+                                  </div>
+                                  <div class="info-item">
+                                    <i class="bi bi-telephone"></i>
+                                    <span><strong>Phone:</strong>
+                                      <?php echo htmlspecialchars($student['parent_phone'] ?? 'N/A'); ?>
+                                    </span>
+                                  </div>
+                                  <div class="info-item">
+                                    <i class="bi bi-envelope"></i>
+                                    <span><strong>Email:</strong>
+                                      <?php echo htmlspecialchars($student['parent_email'] ?? 'N/A'); ?>
+                                    </span>
+                                  </div>
+                                  <?php if ($student['parent_address']): ?>
+                                    <div class="info-item">
+                                      <i class="bi bi-geo-alt"></i>
+                                      <span><strong>Address:</strong>
+                                        <?php echo htmlspecialchars($student['parent_address']); ?>
+                                      </span>
+                                    </div>
+                                  <?php endif; ?>
+                                </div>
+                              </div>
+                            </div>
+                          <?php endif; ?>
+
+                          <div class="mt-3 d-flex gap-2">
+                            <a href="admin_dashboard/students.php?id=<?php echo $student['id']; ?>"
+                              class="btn btn-sm btn-primary">
+                              <i class="bi bi-eye"></i> View Full Profile
+                            </a>
+                            <a href="attendance.php?student=<?php echo $student['id']; ?>"
+                              class="btn btn-sm btn-info text-white">
+                              <i class="bi bi-calendar-check"></i> View Attendance
+                            </a>
+                            <a href="messages.php?student=<?php echo $student['id']; ?>" class="btn btn-sm btn-secondary">
+                              <i class="bi bi-chat"></i> Send Message
+                            </a>
+                            <?php if ($student['parent_id']): ?>
+                              <a href="messages.php?parent=<?php echo $student['parent_id']; ?>"
+                                class="btn btn-sm btn-outline-success">
+                                <i class="bi bi-chat-dots"></i> Contact Parent
+                              </a>
+                            <?php endif; ?>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  <?php endforeach; ?>
+                <?php else: ?>
+                  <tr>
+                    <td colspan="7" class="text-center py-4">
+                      <i class="bi bi-inbox fs-1 d-block text-muted"></i>
+                      <p class="text-muted mb-0">No students found matching your criteria</p>
+                    </td>
+                  </tr>
+                <?php endif; ?>
+              </tbody>
+            </table>
+          </div>
+          <div class="card-body d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <small class="text-muted">
+              Showing
+              <?php echo min($offset + 1, $total_students); ?> to
+              <?php echo min($offset + $per_page, $total_students); ?> of
+              <?php echo $total_students; ?> students
+            </small>
+            <?php if ($total_pages > 1): ?>
+              <ul class="pagination pagination-sm mb-0">
+                <?php if ($page > 1): ?>
+                  <li class="page-item">
+                    <a class="page-link"
+                      href="?page=<?php echo $page - 1; ?>&search=<?php echo urlencode($search); ?>&class=<?php echo urlencode($class_filter); ?>&status=<?php echo urlencode($status_filter); ?>">Previous</a>
+                  </li>
+                <?php else: ?>
+                  <li class="page-item disabled"><span class="page-link">Previous</span></li>
+                <?php endif; ?>
+
+                <?php
+                $start_page = max(1, $page - 2);
+                $end_page = min($total_pages, $page + 2);
+                ?>
+
+                <?php if ($start_page > 1): ?>
+                  <li class="page-item"><a class="page-link"
+                      href="?page=1&search=<?php echo urlencode($search); ?>&class=<?php echo urlencode($class_filter); ?>&status=<?php echo urlencode($status_filter); ?>">1</a>
+                  </li>
+                  <?php if ($start_page > 2): ?>
+                    <li class="page-item disabled"><span class="page-link">...</span></li>
+                  <?php endif; ?>
+                <?php endif; ?>
+
+                <?php for ($i = $start_page; $i <= $end_page; $i++): ?>
+                  <li class="page-item <?php echo $i == $page ? 'active' : ''; ?>">
+                    <a class="page-link"
+                      href="?page=<?php echo $i; ?>&search=<?php echo urlencode($search); ?>&class=<?php echo urlencode($class_filter); ?>&status=<?php echo urlencode($status_filter); ?>">
+                      <?php echo $i; ?>
+                    </a>
+                  </li>
+                <?php endfor; ?>
+
+                <?php if ($end_page < $total_pages): ?>
+                  <?php if ($end_page < $total_pages - 1): ?>
+                    <li class="page-item disabled"><span class="page-link">...</span></li>
+                  <?php endif; ?>
+                  <li class="page-item"><a class="page-link"
+                      href="?page=<?php echo $total_pages; ?>&search=<?php echo urlencode($search); ?>&class=<?php echo urlencode($class_filter); ?>&status=<?php echo urlencode($status_filter); ?>">
+                      <?php echo $total_pages; ?>
+                    </a></li>
+                <?php endif; ?>
+
+                <?php if ($page < $total_pages): ?>
+                  <li class="page-item">
+                    <a class="page-link"
+                      href="?page=<?php echo $page + 1; ?>&search=<?php echo urlencode($search); ?>&class=<?php echo urlencode($class_filter); ?>&status=<?php echo urlencode($status_filter); ?>">Next</a>
+                  </li>
+                <?php else: ?>
+                  <li class="page-item disabled"><span class="page-link">Next</span></li>
+                <?php endif; ?>
+              </ul>
+            <?php endif; ?>
+          </div>
+        </div>
+      </main>
+      <footer class="td-footer">© 2026 Bright Future School — Teacher Panel.</footer>
     </div>
   </div>
 
-  <div id="toastContainer"></div>
-
-  <!-- Bootstrap & Scripts -->
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="js/script.js"></script>
-  <script src="js/students.js"></script>
-
   <script>
-    // Initialize students page
+    // Toggle student detail row
+    function toggleDetails(studentId) {
+      const detailRow = document.getElementById('detail_' + studentId);
+      const btn = event.currentTarget;
+
+      if (detailRow.classList.contains('show')) {
+        detailRow.classList.remove('show');
+        btn.classList.remove('expanded');
+        btn.innerHTML = '<i class="bi bi-chevron-down"></i>';
+      } else {
+        // Close all other open details
+        document.querySelectorAll('.detail-row.show').forEach(row => {
+          row.classList.remove('show');
+          const otherBtn = row.previousElementSibling.querySelector('.expand-btn');
+          if (otherBtn) {
+            otherBtn.classList.remove('expanded');
+            otherBtn.innerHTML = '<i class="bi bi-chevron-down"></i>';
+          }
+        });
+
+        detailRow.classList.add('show');
+        btn.classList.add('expanded');
+        btn.innerHTML = '<i class="bi bi-chevron-up"></i>';
+      }
+    }
+
+    // Expand all details
+    function expandAll() {
+      const detailRows = document.querySelectorAll('.detail-row');
+      const isAllExpanded = Array.from(detailRows).every(row => row.classList.contains('show'));
+
+      detailRows.forEach((row, index) => {
+        const btn = row.previousElementSibling.querySelector('.expand-btn');
+        if (isAllExpanded) {
+          row.classList.remove('show');
+          if (btn) {
+            btn.classList.remove('expanded');
+            btn.innerHTML = '<i class="bi bi-chevron-down"></i>';
+          }
+        } else {
+          row.classList.add('show');
+          if (btn) {
+            btn.classList.add('expanded');
+            btn.innerHTML = '<i class="bi bi-chevron-up"></i>';
+          }
+        }
+      });
+    }
+
+    // View student profile
+    function viewStudent(studentId) {
+      window.location.href = 'view_student.php?id=' + studentId;
+    }
+
+    // Message student
+    function messageStudent(studentId) {
+      window.location.href = 'messages.php?student=' + studentId;
+    }
+
+    // Auto-open first student on page load (optional)
     document.addEventListener('DOMContentLoaded', function () {
-      StudentsApp.init();
+      // Uncomment to auto-open first student
+      // const firstRow = document.querySelector('.student-row');
+      // if (firstRow) {
+      //     const btn = firstRow.querySelector('.expand-btn');
+      //     if (btn) btn.click();
+      // }
     });
   </script>
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
 </body>
 
 </html>

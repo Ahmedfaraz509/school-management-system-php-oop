@@ -1,126 +1,74 @@
 <?php
-// timetable.php - Student Timetable Page
+// timetable.php
 require_once '../database/connect.php';
 
 session_start();
+$teacher_id = $_SESSION['teacher_id'] ?? 10; // Default teacher ID for demo
 
-// Get student ID from session or use default
-$student_id = $_SESSION['student_id'] ?? 4;
-
-// Check if student exists
-$check_stmt = $conn->prepare("SELECT id FROM students WHERE id = :id");
-$check_stmt->bindValue(':id', $student_id);
-$check_stmt->execute();
-$student_exists = $check_stmt->fetch();
-
-if (!$student_exists) {
-  $first_stmt = $conn->query("SELECT id FROM students LIMIT 1");
-  $first = $first_stmt->fetch();
-  if ($first) {
-    $student_id = $first['id'];
-    $_SESSION['student_id'] = $student_id;
-  } else {
-    die("No students found in the database.");
-  }
-}
-
-// Get student info
-$student_stmt = $conn->prepare("
-    SELECT 
-        s.id,
-        s.first_name,
-        s.last_name,
-        s.student_uid,
-        s.class_id,
-        c.name as class_name,
-        c.grade as class_grade
-    FROM students s
-    LEFT JOIN classes c ON s.class_id = c.id
-    WHERE s.id = :student_id
+// Get teacher info
+$teacher_stmt = $conn->prepare("
+    SELECT full_name, email, qualification, photo 
+    FROM teachers 
+    WHERE user_id = :user_id
 ");
-$student_stmt->bindValue(':student_id', $student_id);
-$student_stmt->execute();
-$student = $student_stmt->fetch();
+$teacher_stmt->bindValue(':user_id', $teacher_id);
+$teacher_stmt->execute();
+$teacher = $teacher_stmt->fetch();
+$teacher_name = $teacher['full_name'] ?? 'Mr. Ahmed';
+$teacher_initials = implode('', array_map(function ($word) {
+  return strtoupper(substr($word, 0, 1));
+}, explode(' ', $teacher_name)));
 
-if (!$student) {
-  $fallback_stmt = $conn->query("
-        SELECT 
-            s.id,
-            s.first_name,
-            s.last_name,
-            s.student_uid,
-            s.class_id,
-            c.name as class_name,
-            c.grade as class_grade
-        FROM students s
-        LEFT JOIN classes c ON s.class_id = c.id
-        LIMIT 1
-    ");
-  $student = $fallback_stmt->fetch();
-  if ($student) {
-    $student_id = $student['id'];
-    $_SESSION['student_id'] = $student_id;
-  }
-}
+// Get timetable for the teacher
+$timetable_stmt = $conn->prepare("
+    SELECT 
+        t.id,
+        t.day_of_week,
+        t.time_slot,
+        t.room,
+        t.created_at,
+        s.subject_title,
+        s.subject_code,
+        s.status as subject_status,
+        c.id as class_id,
+        c.name as class_name,
+        c.grade as class_grade,
+        c.room_no as class_room
+    FROM timetable t
+    LEFT JOIN subjects s ON t.subject_id = s.id
+    LEFT JOIN classes c ON t.class_id = c.id
+    WHERE t.teacher_id = :teacher_id
+    ORDER BY 
+        FIELD(t.day_of_week, 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'),
+        t.time_slot ASC
+");
 
-$student_name = isset($student['first_name']) ? ($student['first_name'] . ' ' . ($student['last_name'] ?? '')) : 'Student';
-$student_name = trim($student_name) ?: 'Student';
-$student_initials = isset($student['first_name']) ? strtoupper(substr($student['first_name'], 0, 1) . substr($student['last_name'] ?? '', 0, 1)) : 'ST';
-$student_initials = $student_initials ?: 'ST';
-
-$class_id = $student['class_id'] ?? 0;
-$class_name = $student['class_name'] ?? 'Not Assigned';
-$class_grade = $student['class_grade'] ?? '';
-
-// Get timetable for this student's class
-$timetable = [];
-if ($class_id > 0) {
-  $timetable_stmt = $conn->prepare("
-        SELECT 
-            t.id,
-            t.day_of_week,
-            t.time_slot,
-            t.room,
-            s.subject_code,
-            s.subject_title,
-            c.name as class_name,
-            c.grade as class_grade,
-            te.full_name as teacher_name
-        FROM timetable t
-        LEFT JOIN subjects s ON t.subject_id = s.id
-        LEFT JOIN classes c ON t.class_id = c.id
-        LEFT JOIN teachers te ON t.teacher_id = te.id
-        WHERE t.class_id = :class_id
-        ORDER BY 
-            FIELD(t.day_of_week, 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'),
-            t.time_slot ASC
-    ");
-  $timetable_stmt->bindValue(':class_id', $class_id);
-  $timetable_stmt->execute();
-  $timetable = $timetable_stmt->fetchAll();
-}
+$timetable_stmt->bindValue(':teacher_id', $teacher_id);
+$timetable_stmt->execute();
+$timetable_records = $timetable_stmt->fetchAll();
 
 // Define days of week
 $days_of_week = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-// Define time slots (from your database)
+// Define time slots (you can customize these)
 $time_slots = [
-  '08:00' => '08:00 – 09:00',
-  '09:00' => '09:00 – 10:00',
-  '10:00' => '10:00 – 10:30',
-  '10:30' => '10:30 – 11:30',
-  '11:30' => '11:30 – 12:30',
-  '12:30' => '12:30 – 01:15',
-  '01:15' => '01:15 – 02:15'
+  '08:00' => '08:00 - 09:00',
+  '09:00' => '09:00 - 10:00',
+  '10:00' => '10:00 - 11:00',
+  '11:00' => '11:00 - 12:00',
+  '12:00' => '12:00 - 01:00',
+  '13:00' => '01:00 - 02:00',
+  '14:00' => '02:00 - 03:00',
+  '15:00' => '03:00 - 04:00'
 ];
 
-// Break slots
+// Break times
 $break_slots = [
-  '10:00' => 'Morning Break',
-  '12:30' => 'Lunch & Prayer Break'
+  '10:00' => 'Break',
+  '12:00' => 'Lunch Break'
 ];
 
-// Organize timetable into grid
+// Organize timetable data into a 2D array
 $timetable_grid = [];
 foreach ($time_slots as $slot_key => $slot_display) {
   $timetable_grid[$slot_key] = [];
@@ -129,8 +77,8 @@ foreach ($time_slots as $slot_key => $slot_display) {
   }
 }
 
-// Fill grid with data
-foreach ($timetable as $record) {
+// Fill the grid with actual data
+foreach ($timetable_records as $record) {
   $slot_key = $record['time_slot'];
   $day = $record['day_of_week'];
 
@@ -139,1581 +87,825 @@ foreach ($timetable as $record) {
   }
 }
 
-// Get subject colors for styling
-$subject_colors = [
-  'Mathematics' => 's-math',
-  'Math' => 's-math',
-  'Physics' => 's-phy',
-  'Chemistry' => 's-chem',
-  'Computer' => 's-cs',
-  'Computer Science' => 's-cs',
-  'English' => 's-eng',
-  'Urdu' => 's-urdu',
-  'Biology' => 's-bio',
-  'default' => 's-default'
-];
+// Get statistics
+$total_classes = count($timetable_records);
+$unique_days = array_unique(array_column($timetable_records, 'day_of_week'));
+$unique_subjects = array_unique(array_column($timetable_records, 'subject_title'));
+$total_subjects = count(array_filter($unique_subjects));
 
-function getSubjectColor($subject_title)
-{
-  global $subject_colors;
-  if (!$subject_title)
-    return $subject_colors['default'];
-  foreach ($subject_colors as $key => $color) {
-    if (stripos($subject_title, $key) !== false) {
-      return $color;
+// Count classes per day
+$classes_per_day = [];
+foreach ($days_of_week as $day) {
+  $count = 0;
+  foreach ($timetable_records as $record) {
+    if ($record['day_of_week'] == $day) {
+      $count++;
     }
   }
-  return $subject_colors['default'];
+  $classes_per_day[$day] = $count;
 }
 
-// Calculate statistics
-$total_periods = count($timetable);
-$today = date('l');
-$today_periods = 0;
-$today_remaining = 0;
+// Get current day
+$current_day = date('l'); // Monday, Tuesday, etc.
 $current_time = date('H:i');
 
-foreach ($timetable as $record) {
-  if ($record['day_of_week'] == $today) {
-    $today_periods++;
-    if ($record['time_slot'] > $current_time) {
-      $today_remaining++;
-    }
-  }
-}
-
-// Get today's periods for display
-$today_periods_list = [];
-foreach ($timetable as $record) {
-  if ($record['day_of_week'] == $today) {
-    $today_periods_list[] = $record;
-  }
-}
-
-// Sort today's periods by time
-usort($today_periods_list, function ($a, $b) {
-  return strcmp($a['time_slot'], $b['time_slot']);
+// Check if current day has classes
+$today_classes = array_filter($timetable_records, function ($record) use ($current_day) {
+  return $record['day_of_week'] == $current_day;
 });
 
-// Get subject distribution
-$subject_distribution = [];
-foreach ($timetable as $record) {
-  $title = $record['subject_title'] ?? 'Unknown';
-  if (!isset($subject_distribution[$title])) {
-    $subject_distribution[$title] = 0;
+// Get upcoming class
+$upcoming_class = null;
+foreach ($today_classes as $class) {
+  if ($class['time_slot'] > $current_time) {
+    $upcoming_class = $class;
+    break;
   }
-  $subject_distribution[$title]++;
-}
-
-// Get unique subjects for pills
-$unique_subjects = array_keys($subject_distribution);
-
-// Get current week number
-$week_number = date('W');
-$week_start = date('d', strtotime('monday this week'));
-$week_end = date('d', strtotime('saturday this week'));
-$month = date('F');
-
-// Get unread message count
-$unread_stmt = $conn->prepare("
-    SELECT COUNT(*) as count
-    FROM messages
-    WHERE recipient_type = 'Student' AND recipient_id = :student_id AND is_read = 0
-");
-$unread_stmt->bindValue(':student_id', $student_id);
-$unread_stmt->execute();
-$unread_count = $unread_stmt->fetch()['count'] ?? 0;
-
-// Get notice count
-$notice_stmt = $conn->prepare("SELECT COUNT(*) as count FROM notices");
-$notice_stmt->execute();
-$notice_count = $notice_stmt->fetch()['count'] ?? 0;
-
-// Get assignment count
-$assignment_count = 0;
-if ($class_id > 0) {
-  $assignment_stmt = $conn->prepare("
-        SELECT COUNT(*) as count 
-        FROM assignments a
-        WHERE a.class_id = :class_id AND a.status = 'active' AND a.due_date >= CURDATE()
-    ");
-  $assignment_stmt->bindValue(':class_id', $class_id);
-  $assignment_stmt->execute();
-  $assignment_count = $assignment_stmt->fetch()['count'] ?? 0;
 }
 ?>
 <!DOCTYPE html>
 <html lang="en">
 
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="description" content="My Timetable — Crescent Public School Student Portal" />
-  <title>My Timetable · Student Portal · Crescent Public School</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
-  <link rel="icon" href="assets/images/logo.svg" type="image/svg+xml" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>My Timetable | Teacher Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
   <style>
-    :root {
-      --primary: #1a2b4c;
-      --primary-light: #2c4a7a;
-      --secondary: #2b6da9;
-      --accent: #e8a838;
-      --bg: #f0f4f9;
-      --card-bg: #ffffff;
-      --text: #1e293b;
-      --muted: #64748b;
-      --border: #e2e8f0;
-      --shadow: 0 2px 16px rgba(0, 0, 0, 0.06);
-      --radius: 16px;
-      --radius-sm: 10px;
-      --transition: 0.25s ease;
+    /* Sidebar Styles */
+    .td-wrapper {
+      display: flex;
+      min-height: 100vh;
     }
 
-    * {
-      box-sizing: border-box;
-    }
-
-    body {
-      background: var(--bg);
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      color: var(--text);
-      margin: 0;
-      padding: 0;
-    }
-
-    .nav-toggle {
-      display: none;
-    }
-
-    .nav-backdrop {
-      display: none;
+    .td-sidebar {
+      width: 260px;
+      background: #2c3e50;
+      color: #ecf0f1;
       position: fixed;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.4);
-      backdrop-filter: blur(3px);
-      z-index: 900;
-    }
-
-    #navToggle:checked~.nav-backdrop {
-      display: block;
-    }
-
-    #navToggle:checked~.app-sidebar {
-      transform: translateX(0);
-    }
-
-    .app-sidebar {
-      position: fixed;
-      top: 0;
-      left: 0;
-      bottom: 0;
-      width: 280px;
-      background: var(--primary);
-      color: rgba(255, 255, 255, 0.85);
+      height: 100vh;
+      overflow-y: auto;
       z-index: 1000;
-      transform: translateX(-100%);
       transition: transform 0.3s ease;
-      display: flex;
-      flex-direction: column;
-      overflow-y: auto;
     }
 
-    @media (min-width: 992px) {
-      .app-sidebar {
-        transform: translateX(0);
-      }
-
-      .nav-backdrop {
-        display: none !important;
-      }
-    }
-
-    .sidebar-head {
-      padding: 18px 20px 14px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-
-    .sidebar-brand {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      text-decoration: none;
-      color: white;
-    }
-
-    .sidebar-brand img {
-      width: 40px;
-      height: 40px;
-      background: rgba(255, 255, 255, 0.1);
-      border-radius: 12px;
-      padding: 6px;
-    }
-
-    .brand-text strong {
-      display: block;
-      font-size: 1rem;
-    }
-
-    .brand-text small {
-      font-size: 0.7rem;
-      opacity: 0.65;
-      font-weight: 400;
-    }
-
-    .sidebar-close {
-      font-size: 1.3rem;
-      cursor: pointer;
-      opacity: 0.6;
-      transition: opacity 0.2s;
-    }
-
-    .sidebar-close:hover {
-      opacity: 1;
-    }
-
-    @media (min-width: 992px) {
-      .sidebar-close {
-        display: none;
-      }
-    }
-
-    .student-card {
-      padding: 16px 20px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-      background: rgba(255, 255, 255, 0.04);
-    }
-
-    .avatar {
-      width: 44px;
-      height: 44px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 600;
-      background: var(--secondary);
-      color: white;
-      flex-shrink: 0;
-      font-size: 1rem;
-    }
-
-    .avatar-lg {
-      width: 52px;
-      height: 52px;
-      font-size: 1.2rem;
-    }
-
-    .avatar-xl {
-      width: 64px;
-      height: 64px;
-      font-size: 1.3rem;
-    }
-
-    .student-card-text strong {
-      display: block;
-      font-size: 0.95rem;
-    }
-
-    .student-card-text small {
-      font-size: 0.75rem;
-      opacity: 0.7;
-    }
-
-    .verify {
-      color: #4ade80;
-      margin-left: auto;
-      font-size: 1.2rem;
-    }
-
-    .sidebar-nav {
-      padding: 12px 0;
+    .td-main {
       flex: 1;
-      overflow-y: auto;
-    }
-
-    .nav-group {
-      font-size: 0.65rem;
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
-      opacity: 0.4;
-      padding: 10px 20px 4px;
-      margin: 0;
-    }
-
-    .nav-item {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 8px 20px;
-      color: rgba(255, 255, 255, 0.7);
-      text-decoration: none;
-      transition: all 0.2s;
-      border-left: 3px solid transparent;
-      font-size: 0.9rem;
-    }
-
-    .nav-item:hover {
-      background: rgba(255, 255, 255, 0.06);
-      color: white;
-    }
-
-    .nav-item.active {
-      background: rgba(255, 255, 255, 0.08);
-      color: white;
-      border-left-color: var(--accent);
-    }
-
-    .nav-item i {
-      width: 20px;
-      font-size: 1.1rem;
-    }
-
-    .nav-tag {
-      margin-left: auto;
-      background: rgba(255, 255, 255, 0.12);
-      padding: 1px 10px;
-      border-radius: 20px;
-      font-size: 0.7rem;
-      font-style: normal;
-      color: white;
-    }
-
-    .nav-tag-warn {
-      background: #f59e0b;
-      color: #1a1a1a;
-    }
-
-    .nav-tag-info {
-      background: #3b82f6;
-    }
-
-    .nav-tag-danger {
-      background: #ef4444;
-    }
-
-    .sidebar-foot {
-      padding: 16px 20px;
-      border-top: 1px solid rgba(255, 255, 255, 0.06);
-      margin-top: auto;
-    }
-
-    .logout-btn {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      color: rgba(255, 255, 255, 0.6);
-      text-decoration: none;
-      padding: 6px 0;
-      font-size: 0.9rem;
-      transition: color 0.2s;
-    }
-
-    .logout-btn:hover {
-      color: #f87171;
-    }
-
-    .copy {
-      font-size: 0.65rem;
-      opacity: 0.35;
-      margin: 6px 0 0;
-    }
-
-    .app-main {
-      margin-left: 0;
+      margin-left: 260px;
+      background: #f4f6f9;
       min-height: 100vh;
       display: flex;
       flex-direction: column;
     }
 
-    @media (min-width: 992px) {
-      .app-main {
-        margin-left: 280px;
-      }
-    }
-
-    .app-topbar {
-      background: var(--card-bg);
-      padding: 12px 24px;
+    .td-brand {
+      padding: 20px;
+      font-size: 1.3rem;
+      font-weight: bold;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
       display: flex;
       align-items: center;
-      gap: 16px;
-      border-bottom: 1px solid var(--border);
+      gap: 10px;
+    }
+
+    .td-brand i {
+      font-size: 1.8rem;
+      color: #3498db;
+    }
+
+    .td-brand small {
+      display: block;
+      font-size: 0.65rem;
+      font-weight: normal;
+      opacity: 0.7;
+    }
+
+    .td-teacher-box {
+      padding: 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .td-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: #3498db;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      color: white;
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+
+    .td-teacher-box h6 {
+      margin: 0;
+      font-size: 0.9rem;
+      color: white;
+    }
+
+    .td-teacher-box p {
+      margin: 0;
+      font-size: 0.75rem;
+      opacity: 0.7;
+    }
+
+    .td-nav {
+      padding: 10px 0;
+    }
+
+    .td-nav-title {
+      padding: 10px 20px;
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      opacity: 0.5;
+      letter-spacing: 1px;
+    }
+
+    .td-nav a {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 20px;
+      color: rgba(255, 255, 255, 0.7);
+      text-decoration: none;
+      transition: all 0.3s;
+      border-left: 3px solid transparent;
+    }
+
+    .td-nav a:hover {
+      background: rgba(255, 255, 255, 0.05);
+      color: white;
+    }
+
+    .td-nav a.active {
+      background: rgba(52, 152, 219, 0.2);
+      color: white;
+      border-left-color: #3498db;
+    }
+
+    .td-nav a.logout {
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      margin-top: 10px;
+      color: #e74c3c;
+    }
+
+    .td-nav a.logout:hover {
+      background: rgba(231, 76, 60, 0.1);
+    }
+
+    .td-nav a i {
+      width: 20px;
+    }
+
+    /* Navbar Styles */
+    .td-navbar {
+      background: white;
+      padding: 15px 25px;
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
       position: sticky;
       top: 0;
       z-index: 100;
       flex-wrap: wrap;
     }
 
-    .nav-btn {
+    .td-burger {
       font-size: 1.5rem;
       cursor: pointer;
-      color: var(--text);
-      display: block;
+      display: none;
     }
 
-    @media (min-width: 992px) {
-      .nav-btn {
-        display: none;
-      }
-    }
-
-    .topbar-title h1 {
-      font-size: 1.15rem;
+    .td-page-title {
+      font-size: 1.2rem;
       margin: 0;
-      font-weight: 600;
     }
 
-    .crumbs {
+    .td-page-title small {
       font-size: 0.75rem;
-      color: var(--muted);
+      color: #6c757d;
+      font-weight: normal;
     }
 
-    .crumbs a {
-      color: var(--secondary);
-      text-decoration: none;
+    .td-search {
+      min-width: 200px;
     }
 
-    .crumbs span {
-      margin: 0 4px;
-      opacity: 0.4;
-    }
-
-    .topbar-search {
-      display: flex;
-      align-items: center;
-      background: var(--bg);
-      border-radius: 30px;
-      padding: 4px 16px;
-      flex: 1;
-      min-width: 160px;
-      max-width: 320px;
-      margin-left: auto;
-    }
-
-    .topbar-search i {
-      color: var(--muted);
-      margin-right: 8px;
-    }
-
-    .topbar-search input {
-      border: none;
-      background: transparent;
-      padding: 8px 0;
-      width: 100%;
-      outline: none;
-      font-size: 0.9rem;
-    }
-
-    .topbar-actions {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-
-    .icon-drop {
-      position: relative;
-    }
-
-    .icon-btn {
+    .td-icon-btn {
       width: 40px;
       height: 40px;
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
-      color: var(--text);
+      background: #f8f9fa;
+      color: #333;
       text-decoration: none;
-      transition: background 0.2s;
       position: relative;
+      transition: background 0.3s;
     }
 
-    .icon-btn:hover {
-      background: var(--bg);
+    .td-icon-btn:hover {
+      background: #e9ecef;
+      color: #333;
     }
 
-    .ping {
-      position: absolute;
-      top: 2px;
-      right: 2px;
-      background: #ef4444;
-      color: white;
-      font-size: 0.6rem;
-      width: 20px;
-      height: 20px;
+    .td-dot {
+      width: 8px;
+      height: 8px;
+      background: #e74c3c;
       border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 600;
-    }
-
-    .drop-panel {
-      display: none;
       position: absolute;
-      right: 0;
-      top: calc(100% + 8px);
-      background: white;
-      border-radius: var(--radius-sm);
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
-      width: 340px;
-      padding: 8px 0;
-      border: 1px solid var(--border);
-      z-index: 200;
+      top: 8px;
+      right: 8px;
+      border: 2px solid white;
     }
 
-    .icon-drop:hover .drop-panel {
-      display: block;
-    }
-
-    .drop-head {
-      display: flex;
-      justify-content: space-between;
-      padding: 8px 16px 12px;
-      border-bottom: 1px solid var(--border);
-      font-size: 0.85rem;
-    }
-
-    .drop-head a {
-      color: var(--secondary);
-      text-decoration: none;
-      font-size: 0.8rem;
-    }
-
-    .drop-row {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 10px 16px;
-      text-decoration: none;
-      color: var(--text);
-      transition: background 0.15s;
-    }
-
-    .drop-row:hover {
-      background: var(--bg);
-    }
-
-    .drop-row p {
-      margin: 0;
-      font-size: 0.85rem;
-    }
-
-    .drop-row small {
-      font-size: 0.7rem;
-      color: var(--muted);
-    }
-
-    .dot-ico {
-      width: 36px;
-      height: 36px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-    }
-
-    .p-info {
-      background: #dbeafe;
-      color: #2563eb;
-    }
-
-    .p-warn {
-      background: #fef3c7;
-      color: #d97706;
-    }
-
-    .p-teal {
-      background: #d1fae5;
-      color: #059669;
-    }
-
-    .p-violet {
-      background: #ede9fe;
-      color: #7c3aed;
-    }
-
-    .p-danger {
-      background: #fee2e2;
-      color: #dc2626;
-    }
-
-    .p-ok {
-      background: #d1fae5;
-      color: #065f46;
-    }
-
-    .p-grey {
-      background: #f1f5f9;
-      color: #475569;
-    }
-
-    .profile-chip {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 4px 12px 4px 4px;
-      border-radius: 30px;
-      text-decoration: none;
-      color: var(--text);
-      transition: background 0.2s;
-    }
-
-    .profile-chip:hover {
-      background: var(--bg);
-    }
-
-    .profile-chip .avatar {
-      width: 32px;
-      height: 32px;
-      font-size: 0.75rem;
-    }
-
-    .profile-chip .who b {
-      display: block;
-      font-size: 0.8rem;
-    }
-
-    .profile-chip .who small {
-      font-size: 0.65rem;
-      color: var(--muted);
-    }
-
-    .profile-chip i {
-      font-size: 0.7rem;
-      color: var(--muted);
-    }
-
-    .app-content {
-      padding: 24px;
+    .td-content {
+      padding: 25px;
       flex: 1;
     }
 
-    @media (max-width: 576px) {
-      .app-content {
-        padding: 16px;
-      }
-    }
-
-    .eyebrow {
-      font-size: 0.75rem;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      color: var(--muted);
-      display: block;
-      margin-bottom: 4px;
-    }
-
-    .welcome h2 {
-      font-size: 1.5rem;
-      font-weight: 700;
-    }
-
-    .quick-chips {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      margin-top: 12px;
-    }
-
-    .chip {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 14px;
+    .td-footer {
       background: white;
-      border-radius: 30px;
-      text-decoration: none;
-      color: var(--text);
-      font-size: 0.8rem;
-      border: 1px solid var(--border);
-      transition: all 0.2s;
+      padding: 15px 25px;
+      text-align: center;
+      font-size: 0.85rem;
+      color: #6c757d;
+      border-top: 1px solid #e9ecef;
     }
 
-    .chip:hover {
-      border-color: var(--secondary);
-      color: var(--secondary);
-    }
-
-    .fact {
+    /* Stat Cards */
+    .stat-card {
+      padding: 15px;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+      display: flex;
+      align-items: center;
+      gap: 15px;
       background: white;
-      padding: 12px 14px;
-      border-radius: var(--radius-sm);
-      text-align: center;
-      border: 1px solid var(--border);
-    }
-
-    .fact small {
-      display: block;
-      font-size: 0.65rem;
-      color: var(--muted);
-    }
-
-    .fact strong {
-      font-size: 1.3rem;
-      display: block;
-    }
-
-    .fact span {
-      font-size: 0.7rem;
-      color: var(--muted);
-    }
-
-    .card {
-      border: none;
-      border-radius: var(--radius);
-      box-shadow: var(--shadow);
-      background: white;
-    }
-
-    .card-head {
-      padding: 16px 20px 0;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-
-    .card-head h3 {
-      font-size: 1rem;
-      font-weight: 600;
-      margin: 0;
-    }
-
-    .card-head .sub {
-      font-size: 0.8rem;
-      font-weight: 400;
-      color: var(--muted);
-      display: block;
-    }
-
-    .card-body {
-      padding: 20px;
-    }
-
-    .card-body.tight {
-      padding: 16px 20px;
-    }
-
-    .pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 4px 14px;
-      border-radius: 30px;
-      font-size: 0.75rem;
-      font-weight: 500;
-      background: var(--bg);
-      color: var(--text);
-    }
-
-    .pill.bare {
-      background: transparent;
-      border: 1px solid var(--border);
-    }
-
-    .pill.s-math {
-      background: #e7f0f8;
-      color: #24598c;
-    }
-
-    .pill.s-phy {
-      background: #efeaf8;
-      color: #54398a;
-    }
-
-    .pill.s-chem {
-      background: #e2f4ec;
-      color: #14684a;
-    }
-
-    .pill.s-cs {
-      background: #e2f0f2;
-      color: #0a4a52;
-    }
-
-    .pill.s-eng {
-      background: #fdf2df;
-      color: #8f5b0c;
-    }
-
-    .pill.s-urdu {
-      background: #fbeae7;
-      color: #9b3729;
-    }
-
-    .pill.p-ok {
-      background: #d1fae5;
-      color: #065f46;
-    }
-
-    .pill.p-teal {
-      background: #d1fae5;
-      color: #059669;
-    }
-
-    .pill.p-info {
-      background: #dbeafe;
-      color: #1e40af;
-    }
-
-    .pill.p-grey {
-      background: #f1f5f9;
-      color: #475569;
-    }
-
-    /* Timetable Styles */
-    .table-wrap {
-      padding: 16px 20px 20px;
-      overflow-x: auto;
-    }
-
-    .tt-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.85rem;
-      min-width: 700px;
-    }
-
-    .tt-table th {
-      background: #f8fafc;
-      font-weight: 600;
-      color: var(--muted);
-      padding: 10px 8px;
-      border: 1px solid var(--border);
-      text-align: center;
-      font-size: 0.75rem;
-      text-transform: uppercase;
-      letter-spacing: 0.3px;
-    }
-
-    .tt-table td {
-      padding: 8px;
-      border: 1px solid var(--border);
-      text-align: center;
-      vertical-align: middle;
-      min-height: 60px;
-    }
-
-    .tt-table th:first-child {
-      background: #f8fafc;
-      font-weight: 600;
-      color: var(--text);
-      font-size: 0.8rem;
-    }
-
-    .tt-cell {
-      display: block;
-      padding: 6px 8px;
-      border-radius: var(--radius-sm);
-      font-size: 0.8rem;
-      text-align: center;
-    }
-
-    .tt-cell b {
-      display: block;
-      font-size: 0.85rem;
-    }
-
-    .tt-cell small {
-      font-size: 0.65rem;
-      opacity: 0.7;
-      display: block;
-    }
-
-    .tt-cell.s-math {
-      background: #e7f0f8;
-      color: #24598c;
-    }
-
-    .tt-cell.s-phy {
-      background: #efeaf8;
-      color: #54398a;
-    }
-
-    .tt-cell.s-chem {
-      background: #e2f4ec;
-      color: #14684a;
-    }
-
-    .tt-cell.s-cs {
-      background: #e2f0f2;
-      color: #0a4a52;
-    }
-
-    .tt-cell.s-eng {
-      background: #fdf2df;
-      color: #8f5b0c;
-    }
-
-    .tt-cell.s-urdu {
-      background: #fbeae7;
-      color: #9b3729;
-    }
-
-    .tt-cell.break-cell {
-      background: #f1f5f9;
-      color: #64748b;
-      padding: 8px;
-    }
-
-    .tt-cell.break-cell b {
-      color: #475569;
-    }
-
-    /* Today schedule rows */
-    .notice-row {
-      display: flex;
-      gap: 12px;
-      align-items: center;
-      padding: 8px 0;
-      border-bottom: 1px solid var(--border);
-    }
-
-    .notice-row:last-child {
-      border-bottom: none;
-    }
-
-    .notice-date {
-      text-align: center;
-      min-width: 44px;
-      background: var(--bg);
-      padding: 4px 8px;
-      border-radius: var(--radius-sm);
-    }
-
-    .notice-date b {
-      display: block;
-      font-size: 1.1rem;
-    }
-
-    .notice-date small {
-      font-size: 0.6rem;
-      color: var(--muted);
-    }
-
-    .notice-row h4 {
-      font-size: 0.9rem;
-      margin: 0;
-      font-weight: 600;
-    }
-
-    .notice-row p {
-      font-size: 0.75rem;
-      color: var(--muted);
-      margin: 0;
-    }
-
-    .notice-row.s-math {
-      border-left: 3px solid #2b6da9;
-    }
-
-    .notice-row.s-phy {
-      border-left: 3px solid #6a4c9e;
-    }
-
-    .notice-row.s-chem {
-      border-left: 3px solid #1a8a62;
-    }
-
-    .notice-row.s-cs {
-      border-left: 3px solid #0d5c66;
-    }
-
-    .notice-row.s-eng {
-      border-left: 3px solid #dd8f21;
-    }
-
-    .notice-row.s-urdu {
-      border-left: 3px solid #bf4638;
-    }
-
-    .bar-label {
-      display: flex;
-      justify-content: space-between;
-      font-size: 0.8rem;
-      margin-bottom: 2px;
-    }
-
-    .bar {
-      display: block;
-      height: 6px;
-      border-radius: 4px;
-      background: var(--bg);
-      overflow: hidden;
-    }
-
-    .bar i {
-      display: block;
-      height: 100%;
-      border-radius: 4px;
-      transition: width 0.6s ease;
-    }
-
-    .bar.mb-3 {
-      margin-bottom: 12px;
-    }
-
-    .meta-list {
-      list-style: none;
-      padding: 0;
-      margin: 0;
-    }
-
-    .meta-list li {
-      display: flex;
-      justify-content: space-between;
-      padding: 6px 0;
-      font-size: 0.85rem;
-      border-bottom: 1px solid var(--border);
-    }
-
-    .meta-list li:last-child {
-      border-bottom: none;
-    }
-
-    .meta-list li i {
-      margin-right: 8px;
-      color: var(--secondary);
-      width: 20px;
-    }
-
-    .alert-soft {
-      padding: 10px 14px;
-      border-radius: var(--radius-sm);
-      display: flex;
-      align-items: flex-start;
-      gap: 10px;
-      font-size: 0.85rem;
-    }
-
-    .alert-soft.teal {
-      background: #f0fdf4;
-      border-left: 3px solid #059669;
-    }
-
-    .alert-soft i {
-      margin-top: 2px;
-      color: #059669;
-    }
-
-    .page-foot {
-      padding: 16px 24px;
-      border-top: 1px solid var(--border);
-      font-size: 0.75rem;
-      color: var(--muted);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-
-    .page-foot a {
-      color: var(--muted);
-      text-decoration: none;
-    }
-
-    .page-foot a:hover {
-      color: var(--text);
-    }
-
-    .lift {
       transition: transform 0.2s;
+      border: none;
     }
 
-    .lift:hover {
+    .stat-card:hover {
       transform: translateY(-2px);
     }
 
-    .rise {
-      animation: rise 0.4s ease forwards;
+    .stat-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 24px;
+      flex-shrink: 0;
     }
 
-    @keyframes rise {
-      from {
-        opacity: 0;
-        transform: translateY(12px);
-      }
-
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
+    .stat-card h3 {
+      margin: 0;
+      font-size: 1.5rem;
     }
 
-    /* Divider */
-    .divider-soft {
-      height: 1px;
-      background: var(--border);
-      margin: 12px 0;
+    .stat-card p {
+      margin: 0;
+      color: #6c757d;
+      font-size: 0.85rem;
     }
 
-    @media (max-width: 768px) {
-      .topbar-title h1 {
-        font-size: 0.95rem;
+    /* Timetable Styles */
+    .timetable-wrapper {
+      overflow-x: auto;
+    }
+
+    .timetable-table {
+      min-width: 800px;
+      width: 100%;
+    }
+
+    .timetable-table th {
+      background: #f8f9fa;
+      font-weight: 600;
+      font-size: 0.85rem;
+      padding: 12px 8px;
+      border: 1px solid #dee2e6;
+    }
+
+    .timetable-table td {
+      padding: 10px 8px;
+      vertical-align: middle;
+      border: 1px solid #dee2e6;
+      min-height: 80px;
+      height: 80px;
+    }
+
+    .timetable-table .time-slot {
+      font-weight: 600;
+      font-size: 0.8rem;
+      white-space: nowrap;
+      background: #f8f9fa;
+      min-width: 100px;
+    }
+
+    .timetable-table .class-cell {
+      min-width: 120px;
+      position: relative;
+      transition: background 0.3s;
+    }
+
+    .timetable-table .class-cell:hover {
+      background: #e8f4fd;
+    }
+
+    .class-cell .subject-name {
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+
+    .class-cell .class-info {
+      font-size: 0.75rem;
+      color: #6c757d;
+    }
+
+    .class-cell .room-info {
+      font-size: 0.7rem;
+      color: #6c757d;
+      display: block;
+    }
+
+    .class-cell .free-text {
+      color: #adb5bd;
+      font-style: italic;
+      font-size: 0.85rem;
+    }
+
+    .class-cell .break-badge {
+      font-size: 0.8rem;
+      padding: 4px 12px;
+    }
+
+    /* Today highlight */
+    .td-today {
+      background: #fff3cd !important;
+    }
+
+    .td-today th {
+      background: #ffeaa7 !important;
+    }
+
+    .td-current {
+      background: #d4edda !important;
+    }
+
+    .td-current .subject-name {
+      color: #155724;
+    }
+
+    /* Upcoming class card */
+    .upcoming-card {
+      border-left: 4px solid #3498db;
+    }
+
+    /* Mobile responsive */
+    .timetable-table td,
+    .timetable-table th {
+      padding: 6px 4px;
+      font-size: 0.8rem;
+    }
+
+    /* Gradient backgrounds */
+    .bg-grad-1 {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+
+    .bg-grad-2 {
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    }
+
+    .bg-grad-3 {
+      background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    }
+
+    .bg-grad-4 {
+      background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+    }
+
+    .bg-grad-5 {
+      background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+    }
+
+    /* Overlay for mobile */
+    .td-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 999;
+    }
+
+    #tdSidebarToggle {
+      display: none;
+    }
+
+    #tdSidebarToggle:checked~.td-overlay {
+      display: block;
+    }
+
+    #tdSidebarToggle:checked~.td-sidebar {
+      transform: translateX(0);
+    }
+
+    /* Responsive */
+    @media (max-width: 992px) {
+      .td-sidebar {
+        transform: translateX(-100%);
       }
 
-      .topbar-search {
-        min-width: 120px;
-        max-width: 180px;
+      .td-main {
+        margin-left: 0;
       }
 
-      .profile-chip .who {
-        display: none;
+      .td-burger {
+        display: block;
       }
 
-      .drop-panel {
-        width: 300px;
-        right: -40px;
+      #tdSidebarToggle:checked~.td-sidebar {
+        transform: translateX(0);
       }
 
-      .card-head {
-        flex-direction: column;
-        align-items: flex-start;
+      .td-search {
+        min-width: 150px;
       }
     }
 
     @media (max-width: 576px) {
-      .topbar-search {
-        display: none;
+      .td-navbar {
+        padding: 10px 15px;
       }
 
-      .app-topbar {
-        padding: 10px 16px;
+      .td-content {
+        padding: 15px;
       }
 
-      .tt-table {
+      .td-search {
+        min-width: 100px;
+        order: 10;
+        width: 100%;
+      }
+
+      .stat-card {
+        padding: 10px;
+        gap: 10px;
+      }
+
+      .stat-icon {
+        width: 36px;
+        height: 36px;
+        font-size: 18px;
+      }
+
+      .stat-card h3 {
+        font-size: 1.2rem;
+      }
+
+      .timetable-table td,
+      .timetable-table th {
         font-size: 0.7rem;
-        min-width: 500px;
+        padding: 4px 2px;
       }
 
-      .tt-cell b {
-        font-size: 0.7rem;
+      .class-cell .subject-name {
+        font-size: 0.75rem;
       }
 
-      .tt-cell small {
-        font-size: 0.55rem;
+      .class-cell .class-info {
+        font-size: 0.65rem;
       }
 
-      .fact strong {
-        font-size: 1rem;
-      }
-
-      .page-foot {
-        flex-direction: column;
-        text-align: center;
+      .class-cell .room-info {
+        font-size: 0.6rem;
       }
     }
   </style>
 </head>
 
 <body>
+  <input type="checkbox" id="tdSidebarToggle">
+  <div class="td-wrapper">
+    <label for="tdSidebarToggle" class="td-overlay"></label>
 
-  <input type="checkbox" id="navToggle" class="nav-toggle" />
-  <label for="navToggle" class="nav-backdrop" aria-hidden="true"></label>
-
-  <aside class="app-sidebar">
-    <div class="sidebar-head">
-      <a href="index.php" class="sidebar-brand">
-        <img src="assets/images/logo.svg" alt="Crescent Public School logo" />
-        <span class="brand-text"><strong>Crescent Public School</strong><small>Student Portal</small></span>
-      </a>
-      <label for="navToggle" class="sidebar-close" aria-label="Close navigation"><i class="bi bi-x-lg"></i></label>
-    </div>
-    <div class="student-card">
-      <span class="avatar avatar-lg">
-        <?php echo $student_initials; ?>
-      </span>
-      <div class="student-card-text">
-        <strong>
-          <?php echo htmlspecialchars($student_name); ?>
-        </strong>
-        <small>
-          <?php echo htmlspecialchars($class_name . ' · ' . ($student['student_uid'] ?? 'STU-0000')); ?>
-        </small>
+    <!-- Sidebar -->
+    <aside class="td-sidebar">
+      <div class="td-brand">
+        <i class="bi bi-mortarboard-fill"></i>
+        <span>Bright Future<small>School Portal</small></span>
       </div>
-      <span class="verify" title="Verified student"><i class="bi bi-patch-check-fill"></i></span>
-    </div>
-    <nav class="sidebar-nav">
-      <p class="nav-group">Overview</p>
-      <a class="nav-item" href="index.php"><i class="bi bi-columns-gap"></i><span>Dashboard</span></a>
-      <p class="nav-group">Academics</p>
-      <a class="nav-item" href="subjects.php"><i class="bi bi-journal-bookmark"></i><span>My Subjects</span><em
-          class="nav-tag">
-          <?php echo count($unique_subjects); ?>
-        </em></a>
-      <a class="nav-item active" href="timetable.php"><i class="bi bi-calendar-week"></i><span>My Timetable</span></a>
-      <a class="nav-item" href="attendance.php"><i class="bi bi-check2-square"></i><span>My Attendance</span></a>
-      <a class="nav-item" href="assignments.php"><i class="bi bi-journal-text"></i><span>Assignments</span><em
-          class="nav-tag nav-tag-warn">
-          <?php echo $assignment_count; ?>
-        </em></a>
-      <a class="nav-item" href="exams.php"><i class="bi bi-pencil-square"></i><span>Exams</span><em
-          class="nav-tag nav-tag-info">3</em></a>
-      <a class="nav-item" href="results.php"><i class="bi bi-graph-up-arrow"></i><span>Results</span></a>
-      <p class="nav-group">Finance</p>
-      <a class="nav-item" href="fees.php"><i class="bi bi-wallet2"></i><span>Fees</span><em
-          class="nav-tag nav-tag-danger">1</em></a>
-      <p class="nav-group">School Life</p>
-      <a class="nav-item" href="notices.php"><i class="bi bi-megaphone"></i><span>Notices</span></a>
-      <a class="nav-item" href="events.php"><i class="bi bi-calendar2-heart"></i><span>Events</span></a>
-      <a class="nav-item" href="messages.php"><i class="bi bi-envelope"></i><span>Messages</span><em class="nav-tag">
-          <?php echo $unread_count; ?>
-        </em></a>
-      <p class="nav-group">Account</p>
-      <a class="nav-item" href="profile.php"><i class="bi bi-person-badge"></i><span>My Profile</span></a>
-      <a class="nav-item" href="settings.php"><i class="bi bi-gear"></i><span>Settings</span></a>
-    </nav>
-    <div class="sidebar-foot">
-      <a href="#" class="logout-btn"><i class="bi bi-box-arrow-right"></i><span>Logout</span></a>
-      <p class="copy">Portal v2.6 · Session 2026–27</p>
-    </div>
-  </aside>
-
-  <div class="app-main">
-    <header class="app-topbar">
-      <label for="navToggle" class="nav-btn" aria-label="Open navigation"><i class="bi bi-list"></i></label>
-      <div class="topbar-title">
-        <h1>My Timetable</h1>
-        <div class="crumbs"><a href="index.php">Home</a><span>/</span>Academics<span>/</span>My Timetable</div>
-      </div>
-      <div class="topbar-search"><i class="bi bi-search"></i><input type="search" placeholder="Search periods or rooms…"
-          aria-label="Search" id="timetableSearch" /></div>
-      <div class="topbar-actions">
-        <div class="icon-drop">
-          <a href="notices.php" class="icon-btn" aria-label="Notifications"><i class="bi bi-bell"></i><span
-              class="ping">
-              <?php echo $notice_count; ?>
-            </span></a>
-          <div class="drop-panel">
-            <div class="drop-head"><strong>Notifications</strong><a href="notices.php">View all</a></div>
-            <a href="exams.php" class="drop-row"><i class="dot-ico p-info"><i class="bi bi-pencil-square"></i></i><span>
-                <p>Mid-Term timetable published</p><small>Examination Cell · 2 hours ago</small>
-              </span></a>
-            <a href="assignments.php" class="drop-row"><i class="dot-ico p-warn"><i
-                  class="bi bi-journal-text"></i></i><span>
-                <p>Assignments due soon</p><small>Mr. Ahmed ·
-                  <?php echo $assignment_count; ?> pending
-                </small>
-              </span></a>
-          </div>
+      <div class="td-teacher-box">
+        <div class="td-avatar">
+          <?php echo $teacher_initials; ?>
         </div>
-        <div class="icon-drop">
-          <a href="messages.php" class="icon-btn" aria-label="Messages"><i class="bi bi-envelope"></i><span
-              class="ping">
-              <?php echo $unread_count; ?>
-            </span></a>
-          <div class="drop-panel">
-            <div class="drop-head"><strong>Messages</strong><a href="messages.php">Open inbox</a></div>
-            <a href="messages.php" class="drop-row"><span class="avatar info">SR</span><span>
-                <p>Ms. Sara Khan · Lab report feedback</p><small>Today, 09:14 AM</small>
-              </span></a>
-          </div>
-        </div>
-        <div class="icon-drop">
-          <a href="profile.php" class="profile-chip"><span class="avatar">
-              <?php echo $student_initials; ?>
-            </span><span class="who"><b>
-                <?php echo htmlspecialchars($student_name); ?>
-              </b><small>
-                <?php echo htmlspecialchars($class_name); ?>
-              </small></span><i class="bi bi-chevron-down"></i></a>
-          <div class="drop-panel">
-            <div class="drop-head"><strong>
-                <?php echo htmlspecialchars($student_name); ?>
-              </strong><span class="pill p-ok">Active</span></div>
-            <a href="profile.php" class="drop-row"><i class="dot-ico p-teal"><i
-                  class="bi bi-person-badge"></i></i><span>
-                <p>My Profile</p><small>
-                  <?php echo $student['student_uid'] ?? 'STU-0000'; ?>
-                </small>
-              </span></a>
-            <a href="settings.php" class="drop-row"><i class="dot-ico p-violet"><i class="bi bi-gear"></i></i><span>
-                <p>Settings</p><small>Preferences &amp; alerts</small>
-              </span></a>
-            <a href="#" class="drop-row"><i class="dot-ico p-danger"><i class="bi bi-box-arrow-right"></i></i><span>
-                <p>Logout</p><small>End this session</small>
-              </span></a>
-          </div>
+        <div>
+          <h6>
+            <?php echo htmlspecialchars($teacher_name); ?>
+          </h6>
+          <p>Mathematics Teacher</p>
         </div>
       </div>
-    </header>
+      <nav class="td-nav">
+        <div class="td-nav-title">Main</div>
+        <a href="index.php"><i class="bi bi-speedometer2"></i> Dashboard</a>
+        <a href="students.php"><i class="bi bi-people"></i> My Students</a>
+        <a href="attendance.php"><i class="bi bi-calendar2-check"></i> Attendance</a>
+        <a href="subjects.php"><i class="bi bi-journal-bookmark"></i> My Subjects</a>
+        <a href="timetable.php" class="active"><i class="bi bi-clock-history"></i> My Timetable</a>
+        <div class="td-nav-title">Academics</div>
+        <a href="assignments.php"><i class="bi bi-file-earmark-text"></i> Assignments</a>
+        <a href="exams.php"><i class="bi bi-pencil-square"></i> Exams</a>
+        <a href="results.php"><i class="bi bi-bar-chart-line"></i> Results</a>
+        <div class="td-nav-title">Communication</div>
+        <a href="notices.php"><i class="bi bi-megaphone"></i> Notices</a>
+        <a href="messages.php"><i class="bi bi-chat-dots"></i> Messages</a>
+        <div class="td-nav-title">Account</div>
+        <a href="profile.php"><i class="bi bi-person-badge"></i> My Profile</a>
+        <a href="settings.php"><i class="bi bi-gear"></i> Settings</a>
+        <a href="#" class="logout"><i class="bi bi-box-arrow-right"></i> Logout</a>
+      </nav>
+    </aside>
 
-    <main class="app-content">
+    <!-- Main Content -->
+    <div class="td-main">
+      <!-- Navbar -->
+      <header class="td-navbar">
+        <label for="tdSidebarToggle" class="td-burger"><i class="bi bi-list"></i></label>
+        <h1 class="td-page-title">My Timetable <small>Weekly teaching schedule</small></h1>
+        <div class="td-search ms-auto">
+          <div class="input-group">
+            <span class="input-group-text bg-white border-end-0"><i class="bi bi-search"></i></span>
+            <input type="search" id="searchInput" class="form-control border-start-0" placeholder="Search classes...">
+          </div>
+        </div>
+        <a href="notices.php" class="td-icon-btn"><i class="bi bi-bell"></i><span class="td-dot"></span></a>
+        <a href="profile.php" class="d-flex align-items-center gap-2 text-dark text-decoration-none">
+          <span class="td-avatar">
+            <?php echo $teacher_initials; ?>
+          </span>
+          <span class="d-none d-md-block">
+            <strong class="d-block" style="font-size:.85rem">
+              <?php echo htmlspecialchars($teacher_name); ?>
+            </strong>
+            <small class="text-muted" style="font-size:.72rem">Mathematics Teacher</small>
+          </span>
+        </a>
+      </header>
 
-      <section class="welcome rise">
-        <div class="row g-4 align-items-center">
-          <div class="col-lg-8">
-            <span class="eyebrow">Week
-              <?php echo $week_number; ?> ·
-              <?php echo $week_start; ?> –
-              <?php echo $week_end; ?>
-              <?php echo $month; ?> 2026
-            </span>
-            <h2>Weekly class timetable</h2>
-            <p>School hours run from 08:00 AM to 02:15 PM, Monday to Saturday. The scrollable grid below shows every
-              period with its subject, teacher and room allocation.</p>
-            <div class="quick-chips">
-              <a href="subjects.php" class="chip"><i class="bi bi-journal-bookmark"></i> My Subjects</a>
-              <a href="attendance.php" class="chip"><i class="bi bi-check2-square"></i> Attendance</a>
-              <a href="assignments.php" class="chip"><i class="bi bi-journal-text"></i> Assignments</a>
+      <!-- Content -->
+      <main class="td-content">
+        <!-- Statistics Cards -->
+        <div class="row g-3 mb-4">
+          <div class="col-6 col-xl-3">
+            <div class="card stat-card">
+              <div class="stat-icon bg-grad-1"><i class="bi bi-calendar2-week"></i></div>
+              <div>
+                <h3>
+                  <?php echo $total_classes; ?>
+                </h3>
+                <p>Total Classes</p>
+              </div>
             </div>
           </div>
-          <div class="col-lg-4">
-            <div class="row g-2">
-              <div class="col-6">
-                <div class="fact"><small>Periods / Week</small><strong>
-                    <?php echo $total_periods; ?>
-                  </strong><span>6 days</span></div>
+          <div class="col-6 col-xl-3">
+            <div class="card stat-card">
+              <div class="stat-icon bg-grad-2"><i class="bi bi-book"></i></div>
+              <div>
+                <h3>
+                  <?php echo $total_subjects; ?>
+                </h3>
+                <p>Subjects</p>
               </div>
-              <div class="col-6">
-                <div class="fact"><small>Today&rsquo;s Periods</small><strong>
-                    <?php echo $today_periods; ?>
-                  </strong><span>
-                    <?php echo $today_remaining; ?> remaining
-                  </span></div>
+            </div>
+          </div>
+          <div class="col-6 col-xl-3">
+            <div class="card stat-card">
+              <div class="stat-icon bg-grad-4"><i class="bi bi-calendar2-day"></i></div>
+              <div>
+                <h3>
+                  <?php echo count($unique_days); ?>
+                </h3>
+                <p>Days</p>
               </div>
-              <div class="col-6">
-                <div class="fact"><small>Assembly</small><strong>07:45 AM</strong><span>Main ground</span></div>
-              </div>
-              <div class="col-6">
-                <div class="fact"><small>Dismissal</small><strong>02:15 PM</strong><span>Gate 2</span></div>
+            </div>
+          </div>
+          <div class="col-6 col-xl-3">
+            <div class="card stat-card">
+              <div class="stat-icon bg-grad-5"><i class="bi bi-clock"></i></div>
+              <div>
+                <h3>
+                  <?php echo count($time_slots); ?>
+                </h3>
+                <p>Time Slots</p>
               </div>
             </div>
           </div>
         </div>
-      </section>
 
-      <section class="mt-4 rise">
-        <div class="card lift">
-          <div class="card-head">
-            <h3>
-              <?php echo htmlspecialchars($class_name); ?> · Weekly Timetable <span class="sub">Drag horizontally on
-                small screens</span>
-            </h3>
-            <span class="d-flex gap-2 flex-wrap">
-              <?php if (count($unique_subjects) > 0): ?>
-                <?php foreach ($unique_subjects as $subject):
-                  $color = getSubjectColor($subject);
-                  ?>
-                  <span class="pill <?php echo $color; ?> bare">
-                    <?php echo htmlspecialchars($subject); ?>
+        <!-- Upcoming Class Alert -->
+        <?php if ($upcoming_class): ?>
+          <div class="alert alert-info alert-dismissible fade show upcoming-card" role="alert">
+            <div class="d-flex align-items-center gap-3 flex-wrap">
+              <i class="bi bi-clock-history fs-3"></i>
+              <div>
+                <strong>Upcoming Class:</strong>
+                <?php echo htmlspecialchars($upcoming_class['subject_title']); ?>
+                <span class="badge bg-primary ms-2">
+                  <?php echo htmlspecialchars($upcoming_class['class_name'] . ' - ' . $upcoming_class['class_grade']); ?>
+                </span>
+                <span class="badge bg-secondary ms-2">
+                  <i class="bi bi-clock me-1"></i>
+                  <?php echo $upcoming_class['time_slot']; ?>
+                </span>
+                <?php if ($upcoming_class['room']): ?>
+                  <span class="badge bg-info text-white ms-2">
+                    <i class="bi bi-door-open me-1"></i>
+                    <?php echo htmlspecialchars($upcoming_class['room']); ?>
                   </span>
-                <?php endforeach; ?>
-              <?php else: ?>
-                <span class="pill bare">No subjects</span>
-              <?php endif; ?>
-            </span>
+                <?php endif; ?>
+              </div>
+              <div class="ms-auto">
+                <a href="students.php?class=<?php echo $upcoming_class['class_id']; ?>" class="btn btn-sm btn-primary">
+                  <i class="bi bi-people"></i> View Students
+                </a>
+              </div>
+            </div>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
           </div>
-          <div class="table-wrap">
-            <table class="tt-table" id="timetableTable">
-              <thead>
-                <tr>
-                  <th style="width:120px">Time</th>
-                  <?php foreach ($days_of_week as $day): ?>
-                    <th>
-                      <?php echo $day; ?>
-                    </th>
-                  <?php endforeach; ?>
-                </tr>
-              </thead>
-              <tbody>
-                <?php foreach ($time_slots as $slot_key => $slot_display):
-                  $is_break = isset($break_slots[$slot_key]);
-                  ?>
-                  <tr class="time-row" data-time="<?php echo $slot_key; ?>">
-                    <th>
-                      <?php echo $slot_display; ?>
-                    </th>
+        <?php elseif ($total_classes > 0): ?>
+          <div class="alert alert-secondary alert-dismissible fade show" role="alert">
+            <i class="bi bi-info-circle me-2"></i>
+            No more classes scheduled for today. Enjoy your free time!
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+          </div>
+        <?php endif; ?>
+
+        <!-- Timetable -->
+        <div class="card">
+          <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <span><i class="bi bi-calendar-week me-2 text-primary"></i>Weekly Timetable</span>
+            <div class="d-flex gap-2">
+              <span class="badge bg-primary-subtle text-primary">Academic Year 2025 - 2026</span>
+              <?php if ($total_classes == 0): ?>
+                <span class="badge bg-warning text-dark">No classes scheduled</span>
+              <?php endif; ?>
+            </div>
+          </div>
+          <div class="card-body p-0">
+            <div class="timetable-wrapper">
+              <table class="timetable-table table table-bordered mb-0">
+                <thead>
+                  <tr>
+                    <th style="min-width: 100px;">Time</th>
                     <?php foreach ($days_of_week as $day):
-                      $record = $timetable_grid[$slot_key][$day] ?? null;
+                      $is_today = $day == $current_day;
                       ?>
-                      <td>
-                        <?php if ($is_break): ?>
-                          <span class="tt-cell break-cell">
-                            <b>
-                              <?php echo $break_slots[$slot_key]; ?>
-                            </b>
-                            <small>School courtyard</small>
-                          </span>
-                        <?php elseif ($record):
-                          $color = getSubjectColor($record['subject_title'] ?? '');
-                          ?>
-                          <span class="tt-cell <?php echo $color; ?>">
-                            <b>
-                              <?php echo htmlspecialchars($record['subject_title'] ?? 'N/A'); ?>
-                            </b>
-                            <small>
-                              <?php echo htmlspecialchars($record['teacher_name'] ?? 'N/A'); ?> ·
-                              <?php echo htmlspecialchars($record['room'] ?? 'N/A'); ?>
-                            </small>
-                          </span>
-                        <?php else: ?>
-                          <span class="text-muted" style="font-size:0.7rem;">—</span>
+                      <th class="<?php echo $is_today ? 'td-today' : ''; ?>">
+                        <?php echo $day; ?>
+                        <?php if ($is_today): ?>
+                          <span class="badge bg-danger ms-1">Today</span>
                         <?php endif; ?>
-                      </td>
+                        <br>
+                        <small class="text-muted">
+                          <?php echo isset($classes_per_day[$day]) ? $classes_per_day[$day] : 0; ?> classes
+                        </small>
+                      </th>
                     <?php endforeach; ?>
                   </tr>
-                <?php endforeach; ?>
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  <?php foreach ($time_slots as $slot_key => $slot_display):
+                    $is_break = isset($break_slots[$slot_key]);
+                    $current_slot_time = $slot_key;
+                    $is_current_slot = $current_day == date('l') &&
+                      $current_time >= $slot_key &&
+                      $current_time < date('H:i', strtotime($slot_key . ' +1 hour'));
+                    ?>
+                    <tr class="<?php echo $is_current_slot ? 'td-current' : ''; ?>">
+                      <td class="time-slot">
+                        <?php echo $slot_display; ?>
+                        <?php if ($is_current_slot): ?>
+                          <span class="badge bg-success d-block mt-1" style="font-size: 0.6rem;">
+                            <i class="bi bi-play-fill"></i> Now
+                          </span>
+                        <?php endif; ?>
+                      </td>
+                      <?php foreach ($days_of_week as $day):
+                        $class_data = $timetable_grid[$slot_key][$day] ?? null;
+                        $is_today = $day == $current_day;
+                        ?>
+                        <td
+                          class="class-cell <?php echo $is_today && $is_current_slot ? 'td-current' : ''; ?> <?php echo $is_today ? 'td-today' : ''; ?>">
+                          <?php if ($is_break): ?>
+                            <span class="badge bg-secondary break-badge">
+                              <i class="bi bi-cup-hot me-1"></i>
+                              <?php echo $break_slots[$slot_key]; ?>
+                            </span>
+                          <?php elseif ($class_data): ?>
+                            <div class="subject-name">
+                              <?php echo htmlspecialchars($class_data['subject_title']); ?>
+                              <?php if ($class_data['subject_code']): ?>
+                                <br>
+                                <small class="text-muted" style="font-size: 0.65rem;">
+                                  <?php echo htmlspecialchars($class_data['subject_code']); ?>
+                                </small>
+                              <?php endif; ?>
+                            </div>
+                            <div class="class-info">
+                              <?php echo htmlspecialchars($class_data['class_name'] ?? 'N/A'); ?>
+                              <?php if ($class_data['class_grade']): ?>
+                                -
+                                <?php echo htmlspecialchars($class_data['class_grade']); ?>
+                              <?php endif; ?>
+                            </div>
+                            <?php if ($class_data['room']): ?>
+                              <span class="room-info">
+                                <i class="bi bi-door-open me-1"></i>
+                                <?php echo htmlspecialchars($class_data['room']); ?>
+                              </span>
+                            <?php endif; ?>
+                            <?php if ($class_data['class_room']): ?>
+                              <span class="room-info text-muted">
+                                <i class="bi bi-building me-1"></i>
+                                <?php echo htmlspecialchars($class_data['class_room']); ?>
+                              </span>
+                            <?php endif; ?>
+                          <?php else: ?>
+                            <span class="free-text">— Free —</span>
+                          <?php endif; ?>
+                        </td>
+                      <?php endforeach; ?>
+                    </tr>
+                  <?php endforeach; ?>
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
-      </section>
-
-      <section class="row g-3 mt-1 rise">
-        <div class="col-lg-4">
-          <div class="card lift h-100">
-            <div class="card-head">
-              <h3>Today ·
-                <?php echo $today; ?> <span class="sub">
-                  <?php echo date('d F Y'); ?>
+          <?php if ($total_classes > 0): ?>
+            <div class="card-footer bg-light">
+              <div class="d-flex gap-3 flex-wrap">
+                <span class="badge bg-success"><i class="bi bi-play-fill me-1"></i> Current</span>
+                <span class="badge bg-warning text-dark"><i class="bi bi-calendar me-1"></i> Today</span>
+                <span class="badge bg-secondary"><i class="bi bi-cup-hot me-1"></i> Break</span>
+                <span class="text-muted small ms-auto">
+                  <i class="bi bi-clock me-1"></i>
+                  Last updated:
+                  <?php echo date('d M Y, h:i A'); ?>
                 </span>
-              </h3>
+              </div>
             </div>
-            <div class="card-body tight">
-              <?php if (count($today_periods_list) > 0): ?>
-                <?php foreach ($today_periods_list as $period):
-                  $color = getSubjectColor($period['subject_title'] ?? '');
-                  $time_parts = explode(':', $period['time_slot']);
-                  $hour = ltrim($time_parts[0], '0');
-                  $ampm = $hour >= 12 ? 'PM' : 'AM';
-                  $display_hour = $hour > 12 ? $hour - 12 : $hour;
-                  $status = $period['time_slot'] < $current_time ? 'Completed' :
-                    ($period['time_slot'] == $current_time ? 'Ongoing' : 'Upcoming');
-                  $status_class = $status == 'Completed' ? 'p-grey' : ($status == 'Ongoing' ? 'p-info' : 'p-teal');
-                  ?>
-                  <div class="notice-row <?php echo $color; ?>">
-                    <div class="notice-date">
-                      <b>
-                        <?php echo $display_hour; ?>
-                      </b>
-                      <small>
-                        <?php echo $ampm; ?>
-                      </small>
-                    </div>
-                    <div>
-                      <h4>
-                        <?php echo htmlspecialchars($period['subject_title'] ?? 'N/A'); ?>
-                      </h4>
-                      <p>
-                        <?php echo htmlspecialchars($period['teacher_name'] ?? 'N/A'); ?> ·
-                        <?php echo htmlspecialchars($period['room'] ?? 'N/A'); ?>
-                      </p>
-                      <span class="pill <?php echo $status_class; ?>">
-                        <?php echo $status; ?>
-                      </span>
-                    </div>
-                  </div>
-                <?php endforeach; ?>
-              <?php else: ?>
-                <div class="text-center py-3 text-muted">
-                  <i class="bi bi-calendar2-day fs-4 d-block mb-2"></i>
-                  <p>No classes scheduled for today</p>
-                </div>
-              <?php endif; ?>
-            </div>
-          </div>
+          <?php endif; ?>
         </div>
 
-        <div class="col-lg-4">
-          <div class="card lift h-100">
-            <div class="card-head">
-              <h3>Period Distribution <span class="sub">Weekly load per subject</span></h3>
-            </div>
-            <div class="card-body">
-              <?php if (count($subject_distribution) > 0):
-                $max_periods = max($subject_distribution);
-                foreach ($subject_distribution as $subject => $count):
-                  $color = getSubjectColor($subject);
-                  $percentage = round(($count / $max_periods) * 100);
-                  $colors = [
-                    's-math' => '#2b6da9',
-                    's-phy' => '#6a4c9e',
-                    's-chem' => '#1a8a62',
-                    's-cs' => '#0d5c66',
-                    's-eng' => '#dd8f21',
-                    's-urdu' => '#bf4638',
-                    'default' => '#64748b'
-                  ];
-                  $bar_color = $colors[$color] ?? $colors['default'];
-                  ?>
-                  <div class="bar-label"><span><b>
-                        <?php echo htmlspecialchars($subject); ?>
-                      </b> ·
-                      <?php echo $count; ?> periods
-                    </span><b>
-                      <?php echo $count; ?>
-                    </b></div>
-                  <span class="bar mb-3"><i
-                      style="width:<?php echo $percentage; ?>%;background:<?php echo $bar_color; ?>"></i></span>
-                <?php endforeach; ?>
-              <?php else: ?>
-                <div class="text-center py-3 text-muted">
-                  <i class="bi bi-bar-chart fs-4 d-block mb-2"></i>
-                  <p>No subject distribution data available</p>
-                </div>
-              <?php endif; ?>
-            </div>
+        <!-- No timetable message -->
+        <?php if ($total_classes == 0): ?>
+          <div class="text-center py-5 mt-3">
+            <i class="bi bi-calendar2-x fs-1 d-block text-muted mb-3"></i>
+            <h5>No Timetable Found</h5>
+            <p class="text-muted">You don't have any classes scheduled in your timetable.</p>
+            <p class="text-muted small">Contact the administrator to set up your timetable.</p>
           </div>
-        </div>
+        <?php endif; ?>
+      </main>
 
-        <div class="col-lg-4">
-          <div class="card lift h-100">
-            <div class="card-head">
-              <h3>School Routine <span class="sub">Standard timings</span></h3>
-            </div>
-            <div class="card-body">
-              <ul class="meta-list">
-                <li><i class="bi bi-flag"></i> Assembly <span>07:45 AM</span></li>
-                <li><i class="bi bi-door-open"></i> School opens <span>07:30 AM</span></li>
-                <li><i class="bi bi-bell"></i> Period 1 begins <span>08:00 AM</span></li>
-                <li><i class="bi bi-cup-hot"></i> Morning break <span>10:00 AM</span></li>
-                <li><i class="bi bi-basket"></i> Lunch &amp; prayer <span>12:30 PM</span></li>
-                <li><i class="bi bi-house-door"></i> Dismissal <span>02:15 PM</span></li>
-                <li><i class="bi bi-calendar-x"></i> Weekend <span>Sunday</span></li>
-              </ul>
-              <div class="divider-soft"></div>
-              <div class="alert-soft teal"><i class="bi bi-info-circle"></i><span>Friday assembly is held after the
-                  prayer break. Saturday has no assembly &mdash; classes start directly at 08:00 AM.</span></div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-    </main>
-
-    <footer class="page-foot">
-      <span>&copy; 2026 Crescent Public School · Student Portal</span>
-      <span class="d-flex gap-3"><a href="notices.php">Help Centre</a><a href="messages.php">Contact Office</a><a
-          href="settings.php">Privacy</a></span>
-    </footer>
+      <!-- Footer -->
+      <footer class="td-footer">© 2026 Bright Future School — Teacher Panel.</footer>
+    </div>
   </div>
 
   <script>
     // Search functionality for timetable
-    document.getElementById('timetableSearch')?.addEventListener('keyup', function () {
+    document.getElementById('searchInput')?.addEventListener('keyup', function () {
       const searchTerm = this.value.toLowerCase();
-      const rows = document.querySelectorAll('#timetableTable tbody tr');
-      let visibleCount = 0;
+      const rows = document.querySelectorAll('.timetable-table tbody tr');
 
       rows.forEach(row => {
-        const cells = row.querySelectorAll('td');
+        const cells = row.querySelectorAll('.class-cell');
         let found = false;
 
         cells.forEach(cell => {
           const text = cell.textContent.toLowerCase();
           if (text.includes(searchTerm)) {
             found = true;
+            // Highlight matching cells
             if (searchTerm.length > 0) {
               cell.style.background = '#fff3cd';
             } else {
@@ -1724,40 +916,26 @@ if ($class_id > 0) {
           }
         });
 
+        // Show/hide row based on search
         if (searchTerm.length > 0) {
           row.style.display = found ? '' : 'none';
-          if (found) visibleCount++;
         } else {
           row.style.display = '';
-          row.querySelectorAll('td').forEach(cell => {
+          // Reset all cell backgrounds
+          row.querySelectorAll('.class-cell').forEach(cell => {
             cell.style.background = '';
           });
-          visibleCount++;
         }
       });
-
-      // Show/hide no results message
-      let noResults = document.getElementById('noResultsMsg');
-      if (visibleCount === 0 && searchTerm.length > 0) {
-        if (!noResults) {
-          const tableWrap = document.querySelector('.table-wrap');
-          noResults = document.createElement('div');
-          noResults.id = 'noResultsMsg';
-          noResults.className = 'text-center py-4 text-muted';
-          noResults.innerHTML = `
-                    <i class="bi bi-search fs-1 d-block mb-3"></i>
-                    <h5>No periods found</h5>
-                    <p>Try adjusting your search terms</p>
-                `;
-          tableWrap.appendChild(noResults);
-        }
-        noResults.style.display = '';
-      } else if (noResults) {
-        noResults.style.display = 'none';
-      }
     });
+
+    // Auto-refresh every 5 minutes to update "Now" indicators
+    setTimeout(function () {
+      location.reload();
+    }, 300000); // 5 minutes
   </script>
 
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 
 </html>

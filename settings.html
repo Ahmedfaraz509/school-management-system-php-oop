@@ -1,347 +1,137 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<meta name="description" content="Settings — Crescent Public School Student Portal" />
-<title>Settings &middot; Student Portal &middot; Crescent Public School</title>
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
-<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
-<link rel="stylesheet" href="css/style.css" />
-<link rel="icon" href="assets/images/logo.svg" type="image/svg+xml" />
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Settings | Teacher Dashboard</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-
-<input type="checkbox" id="navToggle" class="nav-toggle" />
-<label for="navToggle" class="nav-backdrop" aria-hidden="true"></label>
-
-<aside class="app-sidebar">
-  <div class="sidebar-head">
-    <a href="index.html" class="sidebar-brand">
-      <img src="assets/images/logo.svg" alt="Crescent Public School logo" />
-      <span class="brand-text"><strong>Crescent Public School</strong><small>Student Portal</small></span>
-    </a>
-    <label for="navToggle" class="sidebar-close" aria-label="Close navigation"><i class="bi bi-x-lg"></i></label>
-  </div>
-  <div class="student-card">
-    <span class="avatar avatar-lg">AF</span>
-    <div class="student-card-text"><strong>Ahmed Faraz</strong><small>Class 10-A &middot; STU-1024</small></div>
-    <span class="verify" title="Verified student"><i class="bi bi-patch-check-fill"></i></span>
-  </div>
-  <nav class="sidebar-nav">
-    <p class="nav-group">Overview</p>
-    <a class="nav-item" href="index.html"><i class="bi bi-columns-gap"></i><span>Dashboard</span></a>
-    <p class="nav-group">Academics</p>
-    <a class="nav-item" href="subjects.html"><i class="bi bi-journal-bookmark"></i><span>My Subjects</span><em class="nav-tag">6</em></a>
-    <a class="nav-item" href="timetable.html"><i class="bi bi-calendar-week"></i><span>My Timetable</span></a>
-    <a class="nav-item" href="attendance.html"><i class="bi bi-check2-square"></i><span>My Attendance</span></a>
-    <a class="nav-item" href="assignments.html"><i class="bi bi-journal-text"></i><span>Assignments</span><em class="nav-tag nav-tag-warn">4</em></a>
-    <a class="nav-item" href="exams.html"><i class="bi bi-pencil-square"></i><span>Exams</span><em class="nav-tag nav-tag-info">3</em></a>
-    <a class="nav-item" href="results.html"><i class="bi bi-graph-up-arrow"></i><span>Results</span></a>
-    <p class="nav-group">Finance</p>
-    <a class="nav-item" href="fees.html"><i class="bi bi-wallet2"></i><span>Fees</span><em class="nav-tag nav-tag-danger">1</em></a>
-    <p class="nav-group">School Life</p>
-    <a class="nav-item" href="notices.html"><i class="bi bi-megaphone"></i><span>Notices</span></a>
-    <a class="nav-item" href="events.html"><i class="bi bi-calendar2-heart"></i><span>Events</span></a>
-    <a class="nav-item" href="messages.html"><i class="bi bi-envelope"></i><span>Messages</span><em class="nav-tag">3</em></a>
-    <p class="nav-group">Account</p>
-    <a class="nav-item" href="profile.html"><i class="bi bi-person-badge"></i><span>My Profile</span></a>
-    <a class="nav-item active" href="settings.html"><i class="bi bi-gear"></i><span>Settings</span></a>
-  </nav>
-  <div class="sidebar-foot">
-    <a href="#" class="logout-btn"><i class="bi bi-box-arrow-right"></i><span>Logout</span></a>
-    <p class="copy">Portal v2.6 &middot; Session 2026&ndash;27</p>
-  </div>
-</aside>
-
-<div class="app-main">
-  <header class="app-topbar">
-    <label for="navToggle" class="nav-btn" aria-label="Open navigation"><i class="bi bi-list"></i></label>
-    <div class="topbar-title">
-      <h1>Settings</h1>
-      <div class="crumbs"><a href="index.html">Home</a><span>/</span>Account<span>/</span>Settings</div>
-    </div>
-    <div class="topbar-search"><i class="bi bi-search"></i><input type="search" placeholder="Search settings&hellip;" aria-label="Search" /></div>
-    <div class="topbar-actions">
-      <div class="icon-drop">
-        <a href="notices.html" class="icon-btn" aria-label="Notifications"><i class="bi bi-bell"></i><span class="ping">5</span></a>
-        <div class="drop-panel">
-          <div class="drop-head"><strong>Notifications</strong><a href="notices.html">View all</a></div>
-          <a href="exams.html" class="drop-row"><i class="dot-ico p-info"><i class="bi bi-pencil-square"></i></i><span><p>Mid-Term timetable published</p><small>Examination Cell &middot; 2 hours ago</small></span></a>
-          <a href="fees.html" class="drop-row"><i class="dot-ico p-danger"><i class="bi bi-wallet2"></i></i><span><p>Fee instalment due on Sep 10</p><small>Accounts Office &middot; 3 days ago</small></span></a>
-        </div>
-      </div>
-      <div class="icon-drop">
-        <a href="messages.html" class="icon-btn" aria-label="Messages"><i class="bi bi-envelope"></i><span class="ping">3</span></a>
-        <div class="drop-panel">
-          <div class="drop-head"><strong>Messages</strong><a href="messages.html">Open inbox</a></div>
-          <a href="messages.html" class="drop-row"><span class="avatar info">SR</span><span><p>Ms. Sara Khan &middot; Lab report feedback</p><small>Today, 09:14 AM</small></span></a>
-        </div>
-      </div>
-      <div class="icon-drop">
-        <a href="profile.html" class="profile-chip"><span class="avatar">AF</span><span class="who"><b>Ahmed Faraz</b><small>Class 10-A</small></span><i class="bi bi-chevron-down"></i></a>
-        <div class="drop-panel">
-          <div class="drop-head"><strong>Ahmed Faraz</strong><span class="pill p-ok">Active</span></div>
-          <a href="profile.html" class="drop-row"><i class="dot-ico p-teal"><i class="bi bi-person-badge"></i></i><span><p>My Profile</p><small>STU-1024</small></span></a>
-          <a href="settings.html" class="drop-row"><i class="dot-ico p-violet"><i class="bi bi-gear"></i></i><span><p>Settings</p><small>Preferences &amp; alerts</small></span></a>
-          <a href="#" class="drop-row"><i class="dot-ico p-danger"><i class="bi bi-box-arrow-right"></i></i><span><p>Logout</p><small>End this session</small></span></a>
-        </div>
-      </div>
-    </div>
-  </header>
-
-  <main class="app-content">
-
-    <section class="welcome rise">
-      <div class="row g-4 align-items-center">
-        <div class="col-lg-8">
-          <span class="eyebrow">Preferences &middot; Ahmed Faraz (STU-1024)</span>
-          <h2>Manage your portal preferences</h2>
-          <p>Update your account details, choose how dates and times are displayed, and control which notifications reach you. Every control on this page is styled with pure CSS &mdash; no JavaScript is used.</p>
-          <div class="quick-chips">
-            <a href="profile.html" class="chip"><i class="bi bi-person-badge"></i> My Profile</a>
-            <a href="messages.html" class="chip"><i class="bi bi-envelope"></i> Messages</a>
-            <a href="notices.html" class="chip"><i class="bi bi-megaphone"></i> Notices</a>
-          </div>
-        </div>
-        <div class="col-lg-4">
-          <div class="row g-2">
-            <div class="col-6"><div class="fact"><small>Alerts On</small><strong>05</strong><span>Channels</span></div></div>
-            <div class="col-6"><div class="fact"><small>Language</small><strong>English</strong><span>Interface</span></div></div>
-            <div class="col-6"><div class="fact"><small>Timezone</small><strong>PKT</strong><span>UTC +05:00</span></div></div>
-            <div class="col-6"><div class="fact"><small>Last Saved</small><strong>22 Aug</strong><span>2026</span></div></div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section class="row g-3 mt-1">
-
-      <!-- ACCOUNT SETTINGS -->
-      <div class="col-xl-6 rise">
-        <div class="card lift h-100">
-          <div class="card-head"><h3>Account Settings <span class="sub">Basic contact information</span></h3></div>
-          <div class="card-body">
-            <form>
-              <div class="row g-3">
-                <div class="col-12">
-                  <label class="form-label" for="accName">Name</label>
-                  <input type="text" class="form-control" id="accName" value="Ahmed Faraz" />
-                </div>
-                <div class="col-12">
-                  <label class="form-label" for="accEmail">Email</label>
-                  <input type="email" class="form-control" id="accEmail" value="ahmed.faraz@student.crescent.edu" />
-                  <div class="form-text">A confirmation link is sent whenever the email address changes.</div>
-                </div>
-                <div class="col-md-6">
-                  <label class="form-label" for="accPhone">Phone</label>
-                  <input type="tel" class="form-control" id="accPhone" value="+92 301 5551024" />
-                </div>
-                <div class="col-md-6">
-                  <label class="form-label" for="accStudent">Student ID</label>
-                  <input type="text" class="form-control" id="accStudent" value="STU-1024" readonly />
-                </div>
-                <div class="col-12">
-                  <div class="divider-soft"></div>
-                  <label class="form-label">Change Password</label>
-                  <div class="row g-3">
-                    <div class="col-md-6"><input type="password" class="form-control" placeholder="Current password" aria-label="Current password" /></div>
-                    <div class="col-md-6"><input type="password" class="form-control" placeholder="New password" aria-label="New password" /></div>
-                  </div>
-                  <div class="form-text mt-2"><i class="bi bi-shield-lock me-1"></i>Use at least 8 characters with one number and one symbol.</div>
-                </div>
-              </div>
-            </form>
-          </div>
-        </div>
-      </div>
-
-      <!-- PREFERENCES -->
-      <div class="col-xl-6 rise rise-2">
-        <div class="card lift h-100">
-          <div class="card-head"><h3>Preferences <span class="sub">Regional display options</span></h3></div>
-          <div class="card-body">
-            <form>
-              <div class="row g-3">
-                <div class="col-12">
-                  <label class="form-label" for="lang">Language</label>
-                  <select class="form-select" id="lang">
-                    <option selected>English (United Kingdom)</option>
-                    <option>Urdu (Pakistan)</option>
-                    <option>Arabic</option>
-                  </select>
-                </div>
-                <div class="col-12">
-                  <label class="form-label" for="tz">Timezone</label>
-                  <select class="form-select" id="tz">
-                    <option selected>(UTC +05:00) Pakistan Standard Time &mdash; Karachi</option>
-                    <option>(UTC +04:00) Gulf Standard Time &mdash; Dubai</option>
-                    <option>(UTC +00:00) Greenwich Mean Time &mdash; London</option>
-                  </select>
-                </div>
-                <div class="col-12">
-                  <label class="form-label" for="dfmt">Date Format</label>
-                  <select class="form-select" id="dfmt">
-                    <option selected>Aug 24, 2026 (MMM DD, YYYY)</option>
-                    <option>24/08/2026 (DD/MM/YYYY)</option>
-                    <option>08/24/2026 (MM/DD/YYYY)</option>
-                    <option>2026-08-24 (ISO 8601)</option>
-                  </select>
-                </div>
-                <div class="col-12">
-                  <label class="form-label d-block">Week Starts On</label>
-                  <div class="d-flex flex-wrap gap-4 box">
-                    <label class="d-flex align-items-center gap-2" style="font-size:.85rem"><input type="radio" name="weekstart" checked /> Monday</label>
-                    <label class="d-flex align-items-center gap-2" style="font-size:.85rem"><input type="radio" name="weekstart" /> Sunday</label>
-                    <label class="d-flex align-items-center gap-2" style="font-size:.85rem"><input type="radio" name="weekstart" /> Saturday</label>
-                  </div>
-                </div>
-                <div class="col-12">
-                  <label class="form-label d-block">Time Display</label>
-                  <div class="d-flex flex-wrap gap-4 box">
-                    <label class="d-flex align-items-center gap-2" style="font-size:.85rem"><input type="radio" name="tformat" checked /> 12-hour (09:00 AM)</label>
-                    <label class="d-flex align-items-center gap-2" style="font-size:.85rem"><input type="radio" name="tformat" /> 24-hour (09:00)</label>
-                  </div>
-                </div>
-                <div class="col-12">
-                  <label class="check-line box">
-                    <span class="txt"><b>Compact table view</b><small>Reduce row height across all tables</small></span>
-                    <input type="checkbox" />
-                  </label>
-                  <label class="check-line box">
-                    <span class="txt"><b>Show percentage beside grades</b><small>Display % next to every grade in results</small></span>
-                    <input type="checkbox" checked />
-                  </label>
-                  <label class="check-line box">
-                    <span class="txt"><b>Reduce animations</b><small>Turn off card hover motion across the portal</small></span>
-                    <input type="checkbox" />
-                  </label>
-                </div>
-              </div>
-            </form>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- NOTIFICATIONS -->
-    <section class="mt-4 rise">
-      <div class="card lift">
-        <div class="card-head">
-          <h3>Notification Settings <span class="sub">Choose what you want to be alerted about</span></h3>
-          <span class="pill p-ok"><i class="bi bi-bell"></i> 5 of 6 enabled</span>
-        </div>
-        <div class="card-body">
-          <div class="row g-3">
-            <div class="col-lg-6">
-              <label class="check-line">
-                <span class="txt"><b>Email Notifications</b><small>Receive a daily summary digest in your inbox</small></span>
-                <span class="switch"><input type="checkbox" checked /><span class="track"></span></span>
-              </label>
-              <label class="check-line">
-                <span class="txt"><b>Assignment Notifications</b><small>New homework and upcoming deadline reminders</small></span>
-                <span class="switch"><input type="checkbox" checked /><span class="track"></span></span>
-              </label>
-              <label class="check-line">
-                <span class="txt"><b>Exam Notifications</b><small>Date sheets, admit cards and result announcements</small></span>
-                <span class="switch"><input type="checkbox" checked /><span class="track"></span></span>
-              </label>
-            </div>
-            <div class="col-lg-6">
-              <label class="check-line">
-                <span class="txt"><b>Attendance Notifications</b><small>Absence and late arrival records</small></span>
-                <span class="switch"><input type="checkbox" checked /><span class="track"></span></span>
-              </label>
-              <label class="check-line">
-                <span class="txt"><b>Notice Notifications</b><small>School circulars and important announcements</small></span>
-                <span class="switch"><input type="checkbox" checked /><span class="track"></span></span>
-              </label>
-              <label class="check-line">
-                <span class="txt"><b>Fee &amp; Payment Alerts</b><small>Invoice generation and due date reminders</small></span>
-                <span class="switch"><input type="checkbox" /><span class="track"></span></span>
-              </label>
-            </div>
-
-            <div class="col-12">
-              <div class="divider-soft"></div>
-              <label class="form-label d-block">Quiet Hours</label>
-              <div class="row g-3">
-                <div class="col-md-4"><input type="time" class="form-control" value="21:00" aria-label="Quiet hours start" /></div>
-                <div class="col-md-4"><input type="time" class="form-control" value="06:30" aria-label="Quiet hours end" /></div>
-                <div class="col-md-4 d-flex align-items-center"><span class="form-text">No alerts are delivered between these times.</span></div>
-              </div>
+<input type="checkbox" id="tdSidebarToggle">
+<div class="td-wrapper">
+  <label for="tdSidebarToggle" class="td-overlay"></label>
+  <aside class="td-sidebar">
+    <div class="td-brand"><i class="bi bi-mortarboard-fill"></i><span>Bright Future<small>School Portal</small></span></div>
+    <div class="td-teacher-box"><div class="td-avatar">MA</div><div><h6>Mr. Ahmed</h6><p>Mathematics Teacher</p></div></div>
+    <nav class="td-nav">
+      <div class="td-nav-title">Main</div>
+      <a href="index.html"><i class="bi bi-speedometer2"></i> Dashboard</a>
+      <a href="students.html"><i class="bi bi-people"></i> My Students</a>
+      <a href="attendance.html"><i class="bi bi-calendar2-check"></i> Attendance</a>
+      <a href="subjects.html"><i class="bi bi-journal-bookmark"></i> My Subjects</a>
+      <a href="timetable.html"><i class="bi bi-clock-history"></i> My Timetable</a>
+      <div class="td-nav-title">Academics</div>
+      <a href="assignments.html"><i class="bi bi-file-earmark-text"></i> Assignments</a>
+      <a href="exams.html"><i class="bi bi-pencil-square"></i> Exams</a>
+      <a href="results.html"><i class="bi bi-bar-chart-line"></i> Results</a>
+      <div class="td-nav-title">Communication</div>
+      <a href="notices.html"><i class="bi bi-megaphone"></i> Notices</a>
+      <a href="messages.html"><i class="bi bi-chat-dots"></i> Messages</a>
+      <div class="td-nav-title">Account</div>
+      <a href="profile.html"><i class="bi bi-person-badge"></i> My Profile</a>
+      <a href="settings.html" class="active"><i class="bi bi-gear"></i> Settings</a>
+      <a href="#" class="logout"><i class="bi bi-box-arrow-right"></i> Logout</a>
+    </nav>
+  </aside>
+  <div class="td-main">
+    <header class="td-navbar">
+      <label for="tdSidebarToggle" class="td-burger"><i class="bi bi-list"></i></label>
+      <h1 class="td-page-title">Settings <small>Account and notification preferences</small></h1>
+      <div class="td-search ms-auto"><div class="input-group">
+        <span class="input-group-text bg-white border-end-0"><i class="bi bi-search"></i></span>
+        <input type="search" class="form-control border-start-0" placeholder="Search...">
+      </div></div>
+      <a href="notices.html" class="td-icon-btn"><i class="bi bi-bell"></i><span class="td-dot"></span></a>
+      <a href="profile.html" class="d-flex align-items-center gap-2 text-dark"><span class="td-avatar">MA</span>
+        <span class="d-none d-md-block"><strong class="d-block" style="font-size:.85rem">Mr. Ahmed</strong><small class="text-muted" style="font-size:.72rem">Mathematics Teacher</small></span></a>
+    </header>
+    <main class="td-content">
+      <div class="row g-3">
+        <div class="col-lg-6">
+          <div class="card h-100">
+            <div class="card-header"><i class="bi bi-person-gear me-2 text-primary"></i>Account Settings</div>
+            <div class="card-body">
+              <form>
+                <div class="mb-3"><label class="form-label">Name</label><input type="text" class="form-control" value="Mr. Ahmed"></div>
+                <div class="mb-3"><label class="form-label">Email</label><input type="email" class="form-control" value="ahmed@brightfuture.edu"></div>
+                <div class="mb-3"><label class="form-label">Phone</label><input type="tel" class="form-control" value="0300-1122334"></div>
+                <div class="mb-3"><label class="form-label">Language</label>
+                  <select class="form-select"><option selected>English</option><option>Urdu</option><option>Arabic</option></select></div>
+                <button type="submit" class="btn btn-primary"><i class="bi bi-check2"></i> Save Account Settings</button>
+              </form>
             </div>
           </div>
         </div>
-        <div class="card-body" style="border-top:1px solid var(--line-2)">
-          <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center">
-            <span style="font-size:.76rem;color:var(--muted)"><i class="bi bi-info-circle me-1"></i>This is a static demo page. Preference changes are not transmitted or stored.</span>
-            <span class="d-flex gap-2">
-              <a href="settings.html" class="btn-outline"><i class="bi bi-arrow-counterclockwise"></i> Restore Defaults</a>
-              <a href="settings.html" class="btn-solid"><i class="bi bi-check2"></i> Save Preferences</a>
-            </span>
+
+        <div class="col-lg-6">
+          <div class="card h-100">
+            <div class="card-header"><i class="bi bi-bell me-2 text-primary"></i>Notification Settings</div>
+            <div class="card-body">
+              <form>
+                <div class="setting-row">
+                  <div><strong class="d-block small">Email Notifications</strong><p>Receive general updates by email</p></div>
+                  <input class="form-check-input m-0" type="checkbox" checked>
+                </div>
+                <div class="setting-row">
+                  <div><strong class="d-block small">Assignment Notifications</strong><p>Alerts when students submit assignments</p></div>
+                  <input class="form-check-input m-0" type="checkbox" checked>
+                </div>
+                <div class="setting-row">
+                  <div><strong class="d-block small">Exam Notifications</strong><p>Reminders about upcoming exams</p></div>
+                  <input class="form-check-input m-0" type="checkbox" checked>
+                </div>
+                <div class="setting-row">
+                  <div><strong class="d-block small">Attendance Notifications</strong><p>Daily attendance summary alerts</p></div>
+                  <input class="form-check-input m-0" type="checkbox">
+                </div>
+                <div class="setting-row">
+                  <div><strong class="d-block small">Notice Notifications</strong><p>New school notices and circulars</p></div>
+                  <input class="form-check-input m-0" type="checkbox" checked>
+                </div>
+                <button type="submit" class="btn btn-primary mt-3"><i class="bi bi-check2"></i> Save Notification Settings</button>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-lg-6">
+          <div class="card">
+            <div class="card-header"><i class="bi bi-shield-lock me-2 text-primary"></i>Change Password</div>
+            <div class="card-body">
+              <form>
+                <div class="mb-3"><label class="form-label">Current Password</label><input type="password" class="form-control" placeholder="••••••••"></div>
+                <div class="mb-3"><label class="form-label">New Password</label><input type="password" class="form-control" placeholder="••••••••"></div>
+                <div class="mb-3"><label class="form-label">Confirm New Password</label><input type="password" class="form-control" placeholder="••••••••"></div>
+                <button type="submit" class="btn btn-primary"><i class="bi bi-key"></i> Update Password</button>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-lg-6">
+          <div class="card">
+            <div class="card-header"><i class="bi bi-sliders me-2 text-primary"></i>Preferences</div>
+            <div class="card-body">
+              <form>
+                <div class="mb-3"><label class="form-label">Date Format</label>
+                  <select class="form-select"><option selected>DD MMM YYYY</option><option>MM/DD/YYYY</option><option>YYYY-MM-DD</option></select></div>
+                <div class="mb-3"><label class="form-label">Time Zone</label>
+                  <select class="form-select"><option selected>(GMT+5) Pakistan Standard Time</option><option>(GMT+4) Gulf Standard Time</option><option>(GMT+0) UTC</option></select></div>
+                <div class="setting-row">
+                  <div><strong class="d-block small">Show Profile to Parents</strong><p>Allow parents to view your contact info</p></div>
+                  <input class="form-check-input m-0" type="checkbox" checked>
+                </div>
+                <button type="submit" class="btn btn-primary mt-3"><i class="bi bi-check2"></i> Save Preferences</button>
+              </form>
+            </div>
           </div>
         </div>
       </div>
-    </section>
-
-    <!-- PRIVACY + DANGER -->
-    <section class="row g-3 mt-1 rise">
-      <div class="col-xl-4">
-        <div class="card lift h-100">
-          <div class="card-head"><h3>Privacy <span class="sub">Data visibility</span></h3></div>
-          <div class="card-body">
-            <label class="check-line box"><span class="txt"><b>Show result to classmates</b><small>Allow peers to view my grades on shared boards</small></span><input type="checkbox" /></label>
-            <label class="check-line box"><span class="txt"><b>Appear in student directory</b><small>List my name in the Class 10-A directory</small></span><input type="checkbox" checked /></label>
-            <label class="check-line box"><span class="txt"><b>Event photography consent</b><small>Allow photographs in school publications</small></span><input type="checkbox" checked /></label>
-          </div>
-        </div>
-      </div>
-      <div class="col-xl-4">
-        <div class="card lift h-100">
-          <div class="card-head"><h3>Linked Devices <span class="sub">Active sessions</span></h3></div>
-          <div class="card-body">
-            <ul class="meta-list">
-              <li><i class="bi bi-laptop"></i> Chrome &middot; Windows <span>Current</span></li>
-              <li><i class="bi bi-phone"></i> Mobile &middot; Android <span>Active</span></li>
-              <li><i class="bi bi-tablet"></i> Tablet &middot; iPad <span>Inactive</span></li>
-            </ul>
-            <div class="divider-soft"></div>
-            <a href="settings.html" class="btn-outline w-100 justify-content-center"><i class="bi bi-box-arrow-up-right"></i> Sign out other devices</a>
-          </div>
-        </div>
-      </div>
-      <div class="col-xl-4">
-        <div class="card lift h-100">
-          <div class="card-head"><h3>Help &amp; Support <span class="sub">Where to get assistance</span></h3></div>
-          <div class="card-body">
-            <ul class="meta-list">
-              <li><i class="bi bi-question-circle"></i> Help Centre <span>Portal Guide</span></li>
-              <li><i class="bi bi-headset"></i> IT Desk <span>Ext. 100</span></li>
-              <li><i class="bi bi-envelope"></i> Support Email <span>support@crescent.edu</span></li>
-              <li><i class="bi bi-clock"></i> Support Hours <span>08:00 &ndash; 03:00</span></li>
-            </ul>
-            <div class="divider-soft"></div>
-            <a href="messages.html" class="btn-solid w-100 justify-content-center"><i class="bi bi-chat-dots"></i> Contact Support</a>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section class="mt-4 rise">
-      <div class="alert-soft danger">
-        <i class="bi bi-exclamation-triangle"></i>
-        <span><b>Need to change your name, date of birth or admission record?</b> These fields are locked in the student portal. Submit a written request with supporting documents to the school office for verification.</span>
-      </div>
-    </section>
-
-  </main>
-
-  <footer class="page-foot">
-    <span>&copy; 2026 Crescent Public School &middot; Student Portal</span>
-    <span class="d-flex gap-3"><a href="notices.html">Help Centre</a><a href="messages.html">Contact Office</a><a href="settings.html">Privacy</a></span>
-  </footer>
+    </main>
+    <footer class="td-footer">© 2026 Bright Future School — Teacher Panel.</footer>
+  </div>
 </div>
-
 </body>
 </html>

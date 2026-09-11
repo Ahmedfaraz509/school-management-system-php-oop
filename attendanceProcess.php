@@ -12,385 +12,57 @@ class AttendanceProcess
   }
 
   /**
-   * Get attendance statistics for a student
+   * Get attendance records by date with filters
    */
-  public function getAttendanceStats($student_id)
-  {
-    $query = "
-            SELECT 
-                COUNT(*) as total_classes,
-                SUM(CASE WHEN status = 'Present' THEN 1 ELSE 0 END) as present,
-                SUM(CASE WHEN status = 'Absent' THEN 1 ELSE 0 END) as absent,
-                SUM(CASE WHEN status = 'Late' THEN 1 ELSE 0 END) as late,
-                ROUND((SUM(CASE WHEN status = 'Present' THEN 1 ELSE 0 END) / COUNT(*)) * 100, 2) as percentage
-            FROM attendance
-            WHERE student_id = :student_id
-        ";
-
-    $stmt = $this->conn->prepare($query);
-    $stmt->bindValue(':student_id', $student_id);
-    $stmt->execute();
-
-    $result = $stmt->fetch();
-    if (!$result || $result['total_classes'] == 0) {
-      return [
-        'total_classes' => 0,
-        'present' => 0,
-        'absent' => 0,
-        'late' => 0,
-        'percentage' => 0
-      ];
-    }
-
-    return [
-      'total_classes' => (int) $result['total_classes'],
-      'present' => (int) $result['present'],
-      'absent' => (int) $result['absent'],
-      'late' => (int) $result['late'],
-      'percentage' => round($result['percentage'] ?? 0, 2)
-    ];
-  }
-
-  /**
-   * Get subject-wise attendance for a student
-   */
-  public function getSubjectWiseAttendance($student_id)
-  {
-    $query = "
-            SELECT 
-                s.id,
-                s.subject_title,
-                s.subject_code,
-                COUNT(a.id) as total_classes,
-                SUM(CASE WHEN a.status = 'Present' THEN 1 ELSE 0 END) as present,
-                SUM(CASE WHEN a.status = 'Absent' THEN 1 ELSE 0 END) as absent,
-                SUM(CASE WHEN a.status = 'Late' THEN 1 ELSE 0 END) as late,
-                ROUND((SUM(CASE WHEN a.status = 'Present' THEN 1 ELSE 0 END) / COUNT(a.id)) * 100, 2) as percentage
-            FROM attendance a
-            LEFT JOIN subjects s ON a.subject_id = s.id
-            WHERE a.student_id = :student_id
-            GROUP BY s.id
-            ORDER BY s.subject_title ASC
-        ";
-
-    $stmt = $this->conn->prepare($query);
-    $stmt->bindValue(':student_id', $student_id);
-    $stmt->execute();
-
-    return $stmt->fetchAll();
-  }
-
-  /**
-   * Get recent attendance records for a student
-   */
-  public function getRecentAttendance($student_id, $limit = 12)
-  {
-    $query = "
-            SELECT 
-                a.attendance_date,
-                s.subject_title,
-                t.full_name as teacher_name,
-                a.status,
-                a.remarks,
-                a.check_in_time
-            FROM attendance a
-            LEFT JOIN subjects s ON a.subject_id = s.id
-            LEFT JOIN teachers t ON a.teacher_id = t.id
-            WHERE a.student_id = :student_id
-            ORDER BY a.attendance_date DESC
-            LIMIT :limit
-        ";
-
-    $stmt = $this->conn->prepare($query);
-    $stmt->bindValue(':student_id', $student_id);
-    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
-    $stmt->execute();
-
-    return $stmt->fetchAll();
-  }
-
-  /**
-   * Get monthly attendance trend
-   */
-  public function getMonthlyTrend($student_id)
-  {
-    $query = "
-            SELECT 
-                MONTH(attendance_date) as month_num,
-                MONTHNAME(attendance_date) as month_name,
-                COUNT(*) as total,
-                SUM(CASE WHEN status = 'Present' THEN 1 ELSE 0 END) as present,
-                ROUND((SUM(CASE WHEN status = 'Present' THEN 1 ELSE 0 END) / COUNT(*)) * 100, 2) as percentage
-            FROM attendance
-            WHERE student_id = :student_id
-            GROUP BY MONTH(attendance_date)
-            ORDER BY MONTH(attendance_date) ASC
-        ";
-
-    $stmt = $this->conn->prepare($query);
-    $stmt->bindValue(':student_id', $student_id);
-    $stmt->execute();
-
-    $results = $stmt->fetchAll();
-    $trend = [];
-
-    foreach ($results as $row) {
-      $trend[] = [
-        'month' => $row['month_name'],
-        'percentage' => round($row['percentage'] ?? 0, 2),
-        'total' => (int) $row['total'],
-        'present' => (int) $row['present']
-      ];
-    }
-
-    return $trend;
-  }
-
-  /**
-   * Get leave records (absences with remarks)
-   */
-  public function getLeaveRecords($student_id, $limit = 4)
-  {
-    $query = "
-            SELECT 
-                a.attendance_date,
-                s.subject_title,
-                a.remarks,
-                a.status
-            FROM attendance a
-            LEFT JOIN subjects s ON a.subject_id = s.id
-            WHERE a.student_id = :student_id 
-                AND a.status IN ('Absent', 'Late')
-                AND a.remarks IS NOT NULL AND a.remarks != ''
-            ORDER BY a.attendance_date DESC
-            LIMIT :limit
-        ";
-
-    $stmt = $this->conn->prepare($query);
-    $stmt->bindValue(':student_id', $student_id);
-    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
-    $stmt->execute();
-
-    return $stmt->fetchAll();
-  }
-
-  /**
-   * Get attendance for a specific date range
-   */
-  public function getAttendanceByDateRange($student_id, $start_date, $end_date)
-  {
-    $query = "
-            SELECT 
-                a.attendance_date,
-                s.subject_title,
-                a.status,
-                a.remarks
-            FROM attendance a
-            LEFT JOIN subjects s ON a.subject_id = s.id
-            WHERE a.student_id = :student_id 
-                AND a.attendance_date BETWEEN :start_date AND :end_date
-            ORDER BY a.attendance_date DESC
-        ";
-
-    $stmt = $this->conn->prepare($query);
-    $stmt->bindValue(':student_id', $student_id);
-    $stmt->bindValue(':start_date', $start_date);
-    $stmt->bindValue(':end_date', $end_date);
-    $stmt->execute();
-
-    return $stmt->fetchAll();
-  }
-
-  /**
-   * Mark attendance for a student
-   */
-  public function markAttendance($student_id, $class_id, $subject_id, $date, $status, $remarks = '', $teacher_id = null)
-  {
-    // Check if attendance already exists
-    $check_stmt = $this->conn->prepare("
-            SELECT id FROM attendance 
-            WHERE student_id = :student_id AND attendance_date = :date AND subject_id = :subject_id
-        ");
-    $check_stmt->bindValue(':student_id', $student_id);
-    $check_stmt->bindValue(':date', $date);
-    $check_stmt->bindValue(':subject_id', $subject_id);
-    $check_stmt->execute();
-
-    if ($check_stmt->rowCount() > 0) {
-      // Update existing record
-      $query = "
-                UPDATE attendance 
-                SET status = :status, 
-                    remarks = :remarks, 
-                    check_in_time = NOW()
-                WHERE student_id = :student_id AND attendance_date = :date AND subject_id = :subject_id
-            ";
-    } else {
-      // Insert new record
-      $query = "
-                INSERT INTO attendance (student_id, class_id, subject_id, attendance_date, check_in_time, status, remarks, teacher_id)
-                VALUES (:student_id, :class_id, :subject_id, :date, NOW(), :status, :remarks, :teacher_id)
-            ";
-    }
-
-    try {
-      $stmt = $this->conn->prepare($query);
-      $stmt->bindValue(':student_id', $student_id);
-      $stmt->bindValue(':class_id', $class_id);
-      $stmt->bindValue(':subject_id', $subject_id);
-      $stmt->bindValue(':date', $date);
-      $stmt->bindValue(':status', $status);
-      $stmt->bindValue(':remarks', $remarks);
-
-      if ($teacher_id !== null) {
-        $stmt->bindValue(':teacher_id', $teacher_id);
-      }
-
-      if ($stmt->execute()) {
-        return ['success' => true, 'message' => 'Attendance marked successfully'];
-      }
-      return ['success' => false, 'message' => 'Failed to mark attendance'];
-    } catch (Exception $e) {
-      return ['success' => false, 'message' => 'Error: ' . $e->getMessage()];
-    }
-  }
-
-  /**
-   * Get attendance summary by class
-   */
-  public function getClassAttendanceSummary($class_id, $date = null)
-  {
-    $date_condition = $date ? "AND attendance_date = :date" : "AND attendance_date = CURDATE()";
-
-    $query = "
-            SELECT 
-                COUNT(*) as total_students,
-                SUM(CASE WHEN status = 'Present' THEN 1 ELSE 0 END) as present,
-                SUM(CASE WHEN status = 'Absent' THEN 1 ELSE 0 END) as absent,
-                SUM(CASE WHEN status = 'Late' THEN 1 ELSE 0 END) as late,
-                ROUND((SUM(CASE WHEN status = 'Present' THEN 1 ELSE 0 END) / COUNT(*)) * 100, 2) as percentage
-            FROM attendance a
-            LEFT JOIN students s ON a.student_id = s.id
-            WHERE s.class_id = :class_id {$date_condition}
-        ";
-
-    $stmt = $this->conn->prepare($query);
-    $stmt->bindValue(':class_id', $class_id);
-    if ($date) {
-      $stmt->bindValue(':date', $date);
-    }
-    $stmt->execute();
-
-    return $stmt->fetch();
-  }
-
-  /**
-   * Get student attendance summary
-   */
-  public function getStudentAttendanceSummary($student_id)
-  {
-    $stats = $this->getAttendanceStats($student_id);
-
-    return [
-      'total_classes' => $stats['total_classes'],
-      'present' => $stats['present'],
-      'absent' => $stats['absent'],
-      'late' => $stats['late'],
-      'percentage' => $stats['percentage'],
-      'status' => $stats['percentage'] >= 75 ? 'Eligible' : 'Not Eligible',
-      'message' => $stats['percentage'] >= 75 ?
-        'Attendance requirement of 75% is satisfied.' :
-        'Attendance is below the required 75%. Please improve.'
-    ];
-  }
-
-  /**
-   * Get attendance by subject for a specific date
-   */
-  public function getSubjectAttendanceByDate($student_id, $date, $subject_id = null)
+  public function getAttendanceByDate($date, $class_id = null, $teacher_id = null, $search = null)
   {
     $query = "
             SELECT 
                 a.id,
+                a.student_id,
+                a.attendance_date,
                 a.status,
                 a.remarks,
                 a.check_in_time,
-                s.subject_title,
-                s.subject_code
-            FROM attendance a
-            LEFT JOIN subjects s ON a.subject_id = s.id
-            WHERE a.student_id = :student_id AND a.attendance_date = :date
-        ";
-
-    if ($subject_id) {
-      $query .= " AND a.subject_id = :subject_id";
-    }
-
-    $stmt = $this->conn->prepare($query);
-    $stmt->bindValue(':student_id', $student_id);
-    $stmt->bindValue(':date', $date);
-    if ($subject_id) {
-      $stmt->bindValue(':subject_id', $subject_id);
-    }
-    $stmt->execute();
-
-    return $stmt->fetchAll();
-  }
-
-  /**
-   * Get student info
-   */
-  public function getStudentInfo($student_id)
-  {
-    $query = "
-            SELECT 
-                s.id,
                 s.first_name,
                 s.last_name,
                 s.student_uid,
-                s.class_id,
+                c.id as class_id,
                 c.name as class_name,
                 c.grade as class_grade
-            FROM students s
+            FROM attendance a
+            LEFT JOIN students s ON a.student_id = s.id
             LEFT JOIN classes c ON s.class_id = c.id
-            WHERE s.id = :student_id
+            WHERE 1=1
         ";
 
-    $stmt = $this->conn->prepare($query);
-    $stmt->bindValue(':student_id', $student_id);
-    $stmt->execute();
+    $params = [];
 
-    return $stmt->fetch();
-  }
-
-  /**
-   * Get students who are absent today
-   */
-  public function getAbsentStudentsToday($class_id = null)
-  {
-    $query = "
-            SELECT 
-                s.id,
-                s.first_name,
-                s.last_name,
-                s.student_uid,
-                c.name as class_name
-            FROM students s
-            LEFT JOIN attendance a ON s.id = a.student_id 
-                AND a.attendance_date = CURDATE()
-            LEFT JOIN classes c ON s.class_id = c.id
-            WHERE a.status = 'Absent' OR a.id IS NULL
-        ";
-
-    if ($class_id) {
-      $query .= " AND s.class_id = :class_id";
+    if ($date) {
+      $query .= " AND a.attendance_date = :date";
+      $params[':date'] = $date;
     }
 
-    $query .= " ORDER BY s.first_name ASC";
+    if ($class_id) {
+      $query .= " AND c.id = :class_id";
+      $params[':class_id'] = $class_id;
+    }
+
+    if ($teacher_id) {
+      $query .= " AND c.teacher_id = :teacher_id";
+      $params[':teacher_id'] = $teacher_id;
+    }
+
+    if ($search) {
+      $query .= " AND (s.first_name LIKE :search OR s.last_name LIKE :search OR s.student_uid LIKE :search)";
+      $params[':search'] = '%' . $search . '%';
+    }
+
+    $query .= " ORDER BY a.attendance_date DESC, s.first_name ASC";
 
     $stmt = $this->conn->prepare($query);
-    if ($class_id) {
-      $stmt->bindValue(':class_id', $class_id);
+    foreach ($params as $key => $value) {
+      $stmt->bindValue($key, $value);
     }
     $stmt->execute();
 
@@ -398,59 +70,246 @@ class AttendanceProcess
   }
 
   /**
-   * Get attendance report for a class
+   * Get attendance statistics
    */
-  public function getClassAttendanceReport($class_id, $start_date, $end_date)
+  public function getAttendanceStats($teacher_id, $date = null, $class_id = null)
   {
     $query = "
             SELECT 
-                s.id as student_id,
-                s.first_name,
-                s.last_name,
-                s.student_uid,
-                COUNT(a.id) as total_classes,
+                COUNT(*) as total_records,
                 SUM(CASE WHEN a.status = 'Present' THEN 1 ELSE 0 END) as present,
                 SUM(CASE WHEN a.status = 'Absent' THEN 1 ELSE 0 END) as absent,
                 SUM(CASE WHEN a.status = 'Late' THEN 1 ELSE 0 END) as late,
-                ROUND((SUM(CASE WHEN a.status = 'Present' THEN 1 ELSE 0 END) / COUNT(a.id)) * 100, 2) as percentage
+                ROUND((SUM(CASE WHEN a.status IN ('Present', 'Late') THEN 1 ELSE 0 END) / COUNT(*)) * 100, 2) as percentage
+            FROM attendance a
+            LEFT JOIN students s ON a.student_id = s.id
+            LEFT JOIN classes c ON s.class_id = c.id
+            WHERE c.teacher_id = :teacher_id
+        ";
+
+    $params = [':teacher_id' => $teacher_id];
+
+    if ($date) {
+      $query .= " AND a.attendance_date = :date";
+      $params[':date'] = $date;
+    }
+
+    if ($class_id) {
+      $query .= " AND c.id = :class_id";
+      $params[':class_id'] = $class_id;
+    }
+
+    $stmt = $this->conn->prepare($query);
+    foreach ($params as $key => $value) {
+      $stmt->bindValue($key, $value);
+    }
+    $stmt->execute();
+
+    $result = $stmt->fetch();
+
+    return [
+      'total' => (int) ($result['total_records'] ?? 0),
+      'present' => (int) ($result['present'] ?? 0),
+      'absent' => (int) ($result['absent'] ?? 0),
+      'late' => (int) ($result['late'] ?? 0),
+      'percentage' => (float) ($result['percentage'] ?? 0)
+    ];
+  }
+
+  /**
+   * Get students for attendance marking
+   */
+  public function getStudentsForAttendance($class_id, $date = null)
+  {
+    $date = $date ?? date('Y-m-d');
+
+    $query = "
+            SELECT 
+                s.id,
+                s.first_name,
+                s.last_name,
+                s.student_uid,
+                a.status as attendance_status,
+                a.remarks as attendance_remarks,
+                a.check_in_time
+            FROM students s
+            LEFT JOIN attendance a ON s.id = a.student_id AND a.attendance_date = :date
+            WHERE s.class_id = :class_id AND s.status = 'Active'
+            ORDER BY s.first_name, s.last_name
+        ";
+
+    $stmt = $this->conn->prepare($query);
+    $stmt->bindValue(':date', $date);
+    $stmt->bindValue(':class_id', $class_id);
+    $stmt->execute();
+
+    return $stmt->fetchAll();
+  }
+
+  /**
+   * Mark or update attendance for a student
+   */
+  public function markAttendance($student_id, $class_id, $date, $status, $remarks = '')
+  {
+    try {
+      // Check if attendance already exists
+      $check_stmt = $this->conn->prepare("
+                SELECT id FROM attendance 
+                WHERE student_id = :student_id AND attendance_date = :date
+            ");
+      $check_stmt->bindValue(':student_id', $student_id);
+      $check_stmt->bindValue(':date', $date);
+      $check_stmt->execute();
+      $existing = $check_stmt->fetch();
+
+      if ($existing) {
+        // Update existing record
+        $query = "
+                    UPDATE attendance 
+                    SET status = :status, 
+                        remarks = :remarks, 
+                        check_in_time = NOW()
+                    WHERE student_id = :student_id AND attendance_date = :date
+                ";
+      } else {
+        // Insert new record
+        $query = "
+                    INSERT INTO attendance (student_id, class_id, attendance_date, check_in_time, status, remarks)
+                    VALUES (:student_id, :class_id, :date, NOW(), :status, :remarks)
+                ";
+      }
+
+      $stmt = $this->conn->prepare($query);
+      $stmt->bindValue(':student_id', $student_id);
+      $stmt->bindValue(':class_id', $class_id);
+      $stmt->bindValue(':date', $date);
+      $stmt->bindValue(':status', $status);
+      $stmt->bindValue(':remarks', $remarks);
+
+      return $stmt->execute();
+    } catch (Exception $e) {
+      error_log("Attendance marking error: " . $e->getMessage());
+      return false;
+    }
+  }
+
+  /**
+   * Mark attendance for multiple students
+   */
+  public function markBulkAttendance($class_id, $date, $attendance_data, $remarks_data = [])
+  {
+    try {
+      $this->conn->beginTransaction();
+
+      $student_stmt = $this->conn->prepare("
+                SELECT id FROM students 
+                WHERE class_id = :class_id AND status = 'Active'
+            ");
+      $student_stmt->bindValue(':class_id', $class_id);
+      $student_stmt->execute();
+      $students = $student_stmt->fetchAll();
+
+      foreach ($students as $student) {
+        $student_id = $student['id'];
+        $status = $attendance_data[$student_id] ?? 'Absent';
+        $remark = $remarks_data[$student_id] ?? '';
+
+        $this->markAttendance($student_id, $class_id, $date, $status, $remark);
+      }
+
+      $this->conn->commit();
+      return true;
+    } catch (Exception $e) {
+      $this->conn->rollBack();
+      error_log("Bulk attendance error: " . $e->getMessage());
+      return false;
+    }
+  }
+
+  /**
+   * Get monthly attendance summary
+   */
+  public function getMonthlyAttendance($student_id, $month, $year)
+  {
+    $query = "
+            SELECT 
+                DAY(attendance_date) as day,
+                status
+            FROM attendance
+            WHERE student_id = :student_id 
+                AND MONTH(attendance_date) = :month 
+                AND YEAR(attendance_date) = :year
+            ORDER BY attendance_date
+        ";
+
+    $stmt = $this->conn->prepare($query);
+    $stmt->bindValue(':student_id', $student_id);
+    $stmt->bindValue(':month', $month);
+    $stmt->bindValue(':year', $year);
+    $stmt->execute();
+
+    return $stmt->fetchAll();
+  }
+
+  /**
+   * Get today's attendance for a class
+   */
+  public function getTodayAttendance($class_id)
+  {
+    $query = "
+            SELECT 
+                s.id,
+                s.first_name,
+                s.last_name,
+                s.student_uid,
+                COALESCE(a.status, 'Not Marked') as status,
+                a.remarks,
+                a.check_in_time
             FROM students s
             LEFT JOIN attendance a ON s.id = a.student_id 
-                AND a.attendance_date BETWEEN :start_date AND :end_date
+                AND a.attendance_date = CURDATE()
             WHERE s.class_id = :class_id AND s.status = 'Active'
-            GROUP BY s.id
-            ORDER BY s.first_name ASC
+            ORDER BY s.first_name, s.last_name
         ";
 
     $stmt = $this->conn->prepare($query);
     $stmt->bindValue(':class_id', $class_id);
-    $stmt->bindValue(':start_date', $start_date);
-    $stmt->bindValue(':end_date', $end_date);
+    $stmt->execute();
+
+    return $stmt->fetchAll();
+  }
+
+  /**
+   * Get classes for a teacher
+   */
+  public function getTeacherClasses($teacher_id)
+  {
+    $query = "
+            SELECT DISTINCT c.id, c.name, c.grade, c.room_no
+            FROM classes c
+            WHERE c.teacher_id = :teacher_id AND c.status = 'active'
+            ORDER BY c.name
+        ";
+
+    $stmt = $this->conn->prepare($query);
+    $stmt->bindValue(':teacher_id', $teacher_id);
     $stmt->execute();
 
     return $stmt->fetchAll();
   }
 }
 
-// Usage example:
+// Usage example in attendance.php:
 /*
-$attendanceProcess = new AttendanceProcess($conn);
+$attendance = new AttendanceProcess($conn);
 
-// Get attendance stats for a student
-$stats = $attendanceProcess->getAttendanceStats($student_id);
+// Get stats
+$stats = $attendance->getAttendanceStats($teacher_id, $search_date, $class_filter);
 
-// Get subject-wise attendance
-$subject_attendance = $attendanceProcess->getSubjectWiseAttendance($student_id);
+// Get records
+$records = $attendance->getAttendanceByDate($search_date, $class_filter, $teacher_id, $student_search);
 
-// Get recent attendance records
-$recent = $attendanceProcess->getRecentAttendance($student_id, 12);
-
-// Get monthly trend
-$trend = $attendanceProcess->getMonthlyTrend($student_id);
-
-// Get leave records
-$leaves = $attendanceProcess->getLeaveRecords($student_id);
-
-// Mark attendance
-$result = $attendanceProcess->markAttendance($student_id, $class_id, $subject_id, date('Y-m-d'), 'Present');
+// Mark bulk attendance
+$attendance->markBulkAttendance($class_id, $date, $statuses, $remarks);
 */
 ?>

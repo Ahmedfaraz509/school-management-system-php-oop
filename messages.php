@@ -1,2099 +1,1215 @@
 <?php
-// messages.php - Fully dynamic messages page with same design as exams
-
+// messages.php
 require_once '../database/connect.php';
-require_once 'message_process.php';
 
-// Get student ID from session (for demo, using student_id = 4)
-$student_id = 4;
+session_start();
+$teacher_id = $_SESSION['teacher_id'] ?? 10; // Default teacher ID for demo
 
-// Initialize the message process
-$messageProcess = new MessageProcess($conn, $student_id);
+// Get teacher info
+$teacher_stmt = $conn->prepare("
+    SELECT id as teacher_db_id, full_name, email, qualification, photo 
+    FROM teachers 
+    WHERE user_id = :user_id
+");
+$teacher_stmt->bindValue(':user_id', $teacher_id);
+$teacher_stmt->execute();
+$teacher = $teacher_stmt->fetch();
+$teacher_name = $teacher['full_name'] ?? 'Mr. Ahmed';
+$teacher_initials = implode('', array_map(function ($word) {
+  return strtoupper(substr($word, 0, 1));
+}, explode(' ', $teacher_name)));
+$teacher_db_id = $teacher['teacher_db_id'] ?? 0;
 
-// Get all data
-$student = $messageProcess->getStudentData();
-$inboxMessages = $messageProcess->getInboxMessages();
-$sentMessages = $messageProcess->getSentMessages();
-$draftMessages = $messageProcess->getDraftMessages();
-$stats = $messageProcess->getMessageStats();
-$contacts = $messageProcess->getContacts();
-$unreadCount = $messageProcess->getUnreadCount();
+// Debug - Check if teacher exists
+if (!$teacher_db_id) {
+  // Try to get teacher by direct ID
+  $fallback_stmt = $conn->prepare("SELECT id, full_name FROM teachers WHERE id = :id");
+  $fallback_stmt->bindValue(':id', $teacher_id);
+  $fallback_stmt->execute();
+  $fallback_teacher = $fallback_stmt->fetch();
+  if ($fallback_teacher) {
+    $teacher_db_id = $fallback_teacher['id'];
+    $teacher_name = $fallback_teacher['full_name'];
+  }
+}
 
-// Format student name for display
-$studentName = htmlspecialchars($student['first_name'] ?? 'Ahmed') . ' ' . htmlspecialchars($student['last_name'] ?? 'Faraz');
-$studentInitials = strtoupper(substr($student['first_name'] ?? 'A', 0, 1) . substr($student['last_name'] ?? 'F', 0, 1));
-$studentClass = htmlspecialchars($student['class_name'] ?? 'Class 10');
-$studentUID = htmlspecialchars($student['student_uid'] ?? 'STU-1024');
+// Process message actions
+if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+  // Send new message
+  if (isset($_POST['send_message'])) {
+    $recipient_type = $_POST['recipient_type'] ?? '';
+    $recipient_id = $_POST['recipient_id'] ?? 0;
+    $subject = $_POST['subject'] ?? '';
+    $content = $_POST['content'] ?? '';
 
-// Get total inbox count
-$inboxCount = count($inboxMessages);
-$sentCount = count($sentMessages);
-$draftCount = count($draftMessages);
+    if ($recipient_type && $recipient_id && $content && $teacher_db_id) {
+      try {
+        $insert_stmt = $conn->prepare("
+                    INSERT INTO messages (sender_type, sender_id, recipient_type, recipient_id, subject, content, is_read)
+                    VALUES ('Teacher', :sender_id, :recipient_type, :recipient_id, :subject, :content, 0)
+                ");
 
-// Get first message for display (if any)
-$firstMessage = !empty($inboxMessages) ? $inboxMessages[0] : null;
+        $insert_stmt->bindValue(':sender_id', $teacher_db_id);
+        $insert_stmt->bindValue(':recipient_type', $recipient_type);
+        $insert_stmt->bindValue(':recipient_id', $recipient_id);
+        $insert_stmt->bindValue(':subject', $subject ?: 'Chat Message');
+        $insert_stmt->bindValue(':content', $content);
+
+        if ($insert_stmt->execute()) {
+          $success_message = "Message sent successfully!";
+        } else {
+          $error_message = "Error sending message.";
+        }
+      } catch (PDOException $e) {
+        $error_message = "Database error: " . $e->getMessage();
+      }
+    } else {
+      $error_message = "Please fill in all required fields.";
+    }
+  }
+
+  // Mark message as read
+  if (isset($_POST['mark_read'])) {
+    $message_id = $_POST['message_id'] ?? 0;
+
+    if ($message_id && $teacher_db_id) {
+      try {
+        $update_stmt = $conn->prepare("
+                    UPDATE messages 
+                    SET is_read = 1 
+                    WHERE id = :id AND recipient_type = 'Teacher' AND recipient_id = :recipient_id
+                ");
+        $update_stmt->bindValue(':id', $message_id);
+        $update_stmt->bindValue(':recipient_id', $teacher_db_id);
+
+        if ($update_stmt->execute()) {
+          echo json_encode(['success' => true]);
+          exit;
+        }
+      } catch (PDOException $e) {
+        // Silent fail
+      }
+    }
+  }
+
+  // Delete message
+  if (isset($_POST['delete_message'])) {
+    $message_id = $_POST['message_id'] ?? 0;
+
+    if ($message_id && $teacher_db_id) {
+      try {
+        $delete_stmt = $conn->prepare("
+                    DELETE FROM messages 
+                    WHERE id = :id AND (sender_id = :sender_id OR recipient_id = :recipient_id)
+                ");
+        $delete_stmt->bindValue(':id', $message_id);
+        $delete_stmt->bindValue(':sender_id', $teacher_db_id);
+        $delete_stmt->bindValue(':recipient_id', $teacher_db_id);
+
+        if ($delete_stmt->execute()) {
+          $success_message = "Message deleted successfully!";
+        } else {
+          $error_message = "Error deleting message.";
+        }
+      } catch (PDOException $e) {
+        $error_message = "Database error: " . $e->getMessage();
+      }
+    }
+  }
+}
+
+// Get filter parameters
+$tab = $_GET['tab'] ?? 'inbox';
+$search = $_GET['search'] ?? '';
+
+// Get message statistics
+$stats = ['total' => 0, 'inbox' => 0, 'sent' => 0, 'unread' => 0];
+if ($teacher_db_id) {
+  try {
+    $stats_query = "
+            SELECT 
+                COUNT(*) as total,
+                SUM(CASE WHEN recipient_type = 'Teacher' AND recipient_id = :teacher_id AND is_read = 0 THEN 1 ELSE 0 END) as unread,
+                SUM(CASE WHEN recipient_type = 'Teacher' AND recipient_id = :teacher_id THEN 1 ELSE 0 END) as inbox,
+                SUM(CASE WHEN sender_type = 'Teacher' AND sender_id = :teacher_id THEN 1 ELSE 0 END) as sent
+            FROM messages
+            WHERE sender_type = 'Teacher' AND sender_id = :teacher_id OR recipient_type = 'Teacher' AND recipient_id = :teacher_id
+        ";
+    $stats_stmt = $conn->prepare($stats_query);
+    $stats_stmt->bindValue(':teacher_id', $teacher_db_id);
+    $stats_stmt->execute();
+    $stats = $stats_stmt->fetch();
+    if (!$stats) {
+      $stats = ['total' => 0, 'inbox' => 0, 'sent' => 0, 'unread' => 0];
+    }
+  } catch (PDOException $e) {
+    // Table might be empty or structure different
+    $stats = ['total' => 0, 'inbox' => 0, 'sent' => 0, 'unread' => 0];
+  }
+}
+
+// Build messages query based on tab
+$messages = [];
+if ($teacher_db_id) {
+  try {
+    $query = "
+            SELECT 
+                m.*,
+                CASE 
+                    WHEN m.sender_type = 'Teacher' THEN t.full_name
+                    WHEN m.sender_type = 'Admin' THEN 'Admin'
+                    WHEN m.sender_type = 'Parent' THEN p.full_name
+                    WHEN m.sender_type = 'Student' THEN CONCAT(s.first_name, ' ', s.last_name)
+                    ELSE 'Unknown'
+                END as sender_name,
+                CASE 
+                    WHEN m.recipient_type = 'Teacher' THEN t2.full_name
+                    WHEN m.recipient_type = 'Admin' THEN 'Admin'
+                    WHEN m.recipient_type = 'Parent' THEN p2.full_name
+                    WHEN m.recipient_type = 'Student' THEN CONCAT(s2.first_name, ' ', s2.last_name)
+                    ELSE 'Unknown'
+                END as recipient_name
+            FROM messages m
+            LEFT JOIN teachers t ON m.sender_type = 'Teacher' AND m.sender_id = t.id
+            LEFT JOIN teachers t2 ON m.recipient_type = 'Teacher' AND m.recipient_id = t2.id
+            LEFT JOIN parents p ON m.sender_type = 'Parent' AND m.sender_id = p.id
+            LEFT JOIN parents p2 ON m.recipient_type = 'Parent' AND m.recipient_id = p2.id
+            LEFT JOIN students s ON m.sender_type = 'Student' AND m.sender_id = s.id
+            LEFT JOIN students s2 ON m.recipient_type = 'Student' AND m.recipient_id = s2.id
+            WHERE 1=1
+        ";
+
+    $params = [];
+
+    // Tab filtering
+    if ($tab == 'inbox') {
+      $query .= " AND m.recipient_type = 'Teacher' AND m.recipient_id = :teacher_id";
+      $params[':teacher_id'] = $teacher_db_id;
+    } elseif ($tab == 'sent') {
+      $query .= " AND m.sender_type = 'Teacher' AND m.sender_id = :teacher_id";
+      $params[':teacher_id'] = $teacher_db_id;
+    } elseif ($tab == 'unread') {
+      $query .= " AND m.recipient_type = 'Teacher' AND m.recipient_id = :teacher_id AND m.is_read = 0";
+      $params[':teacher_id'] = $teacher_db_id;
+    }
+
+    // Search filter
+    if (!empty($search)) {
+      $query .= " AND (m.subject LIKE :search OR m.content LIKE :search)";
+      $params[':search'] = '%' . $search . '%';
+    }
+
+    $query .= " ORDER BY m.created_at DESC";
+
+    $stmt = $conn->prepare($query);
+    foreach ($params as $key => $value) {
+      $stmt->bindValue($key, $value);
+    }
+    $stmt->execute();
+    $messages = $stmt->fetchAll();
+  } catch (PDOException $e) {
+    $messages = [];
+  }
+}
+
+// Get contacts for compose dropdown
+$contacts = [];
+
+// Get student contacts
+try {
+  $contacts_stmt = $conn->prepare("
+        SELECT 
+            'Student' as type,
+            s.id,
+            s.first_name,
+            s.last_name,
+            s.student_uid,
+            c.name as class_name
+        FROM students s
+        LEFT JOIN classes c ON s.class_id = c.id
+        WHERE c.teacher_id = :teacher_id AND s.status = 'Active'
+        ORDER BY s.first_name
+    ");
+  $contacts_stmt->bindValue(':teacher_id', $teacher_db_id);
+  $contacts_stmt->execute();
+  $student_contacts = $contacts_stmt->fetchAll();
+  $contacts = array_merge($contacts, $student_contacts);
+} catch (PDOException $e) {
+  // No students found or table issue
+}
+
+// Get parent contacts
+try {
+  $parent_contacts_stmt = $conn->prepare("
+        SELECT 
+            'Parent' as type,
+            p.id,
+            p.full_name as first_name,
+            '' as last_name,
+            p.phone as student_uid,
+            'Parent' as class_name
+        FROM parents p
+        LEFT JOIN students s ON p.student_id = s.id
+        LEFT JOIN classes c ON s.class_id = c.id
+        WHERE c.teacher_id = :teacher_id
+        GROUP BY p.id
+        ORDER BY p.full_name
+    ");
+  $parent_contacts_stmt->bindValue(':teacher_id', $teacher_db_id);
+  $parent_contacts_stmt->execute();
+  $parent_contacts = $parent_contacts_stmt->fetchAll();
+  $contacts = array_merge($contacts, $parent_contacts);
+} catch (PDOException $e) {
+  // No parents found
+}
+
+// Add Admin contact
+$contacts[] = [
+  'type' => 'Admin',
+  'id' => 1,
+  'first_name' => 'Admin',
+  'last_name' => '',
+  'student_uid' => '',
+  'class_name' => 'Administration'
+];
+
+// Get conversation for chat view
+$conversation_id = isset($_GET['conversation']) ? (int) $_GET['conversation'] : 0;
+$conversation_messages = [];
+$conversation_participant = null;
+
+if ($conversation_id > 0 && $teacher_db_id) {
+  // Find participant
+  foreach ($contacts as $contact) {
+    if ($contact['id'] == $conversation_id) {
+      $conversation_participant = $contact;
+      break;
+    }
+  }
+
+  if ($conversation_participant) {
+    try {
+      $conv_stmt = $conn->prepare("
+                SELECT 
+                    m.*,
+                    CASE 
+                        WHEN m.sender_type = 'Teacher' THEN 'You'
+                        WHEN m.sender_type = 'Admin' THEN 'Admin'
+                        WHEN m.sender_type = 'Parent' THEN p.full_name
+                        WHEN m.sender_type = 'Student' THEN CONCAT(s.first_name, ' ', s.last_name)
+                        ELSE 'Unknown'
+                    END as sender_display_name,
+                    m.sender_type = 'Teacher' AND m.sender_id = :teacher_id as is_from_teacher
+                FROM messages m
+                LEFT JOIN parents p ON m.sender_type = 'Parent' AND m.sender_id = p.id
+                LEFT JOIN students s ON m.sender_type = 'Student' AND m.sender_id = s.id
+                WHERE (
+                    (m.sender_type = 'Teacher' AND m.sender_id = :teacher_id AND m.recipient_type = :recipient_type AND m.recipient_id = :recipient_id)
+                    OR 
+                    (m.recipient_type = 'Teacher' AND m.recipient_id = :teacher_id AND m.sender_type = :recipient_type AND m.sender_id = :recipient_id)
+                )
+                ORDER BY m.created_at ASC
+            ");
+
+      $conv_stmt->bindValue(':teacher_id', $teacher_db_id);
+      $conv_stmt->bindValue(':recipient_type', $conversation_participant['type']);
+      $conv_stmt->bindValue(':recipient_id', $conversation_participant['id']);
+      $conv_stmt->execute();
+      $conversation_messages = $conv_stmt->fetchAll();
+    } catch (PDOException $e) {
+      $conversation_messages = [];
+    }
+  }
+}
+
+// Function to get status badge
+function getMessageStatusBadge($is_read, $is_from_teacher)
+{
+  if ($is_from_teacher) {
+    return '<span class="badge bg-primary">Sent</span>';
+  } elseif ($is_read) {
+    return '<span class="badge bg-success">Read</span>';
+  } else {
+    return '<span class="badge bg-danger">Unread</span>';
+  }
+}
+
+// Function to get time ago
+function timeAgo($datetime)
+{
+  if (!$datetime)
+    return 'N/A';
+  $time = strtotime($datetime);
+  $now = time();
+  $diff = $now - $time;
+
+  if ($diff < 60) {
+    return 'Just now';
+  } elseif ($diff < 3600) {
+    return floor($diff / 60) . 'm ago';
+  } elseif ($diff < 86400) {
+    return floor($diff / 3600) . 'h ago';
+  } elseif ($diff < 604800) {
+    return floor($diff / 86400) . 'd ago';
+  } else {
+    return date('d M Y', $time);
+  }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
 
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="description" content="Messages — Crescent Public School Student Portal" />
-  <title>Messages &middot; Student Portal &middot; Crescent Public School</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
-  <link rel="icon" href="assets/images/logo.svg" type="image/svg+xml" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Messages | Teacher Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
   <style>
-    /* ===== All styles from exams page ===== */
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
-    body {
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: #0a0e1a;
-      color: #e8edf5;
-      min-height: 100vh;
+    .td-wrapper {
       display: flex;
+      min-height: 100vh;
     }
 
-    ::-webkit-scrollbar {
-      width: 6px;
-      height: 6px;
-    }
-
-    ::-webkit-scrollbar-track {
-      background: #141b2b;
-    }
-
-    ::-webkit-scrollbar-thumb {
-      background: #2a3a5a;
-      border-radius: 10px;
-    }
-
-    ::-webkit-scrollbar-thumb:hover {
-      background: #3a4a6a;
-    }
-
-    .app-sidebar {
+    .td-sidebar {
       width: 260px;
-      min-height: 100vh;
-      background: linear-gradient(180deg, #0d1225 0%, #0a0e1a 100%);
-      border-right: 1px solid rgba(255, 255, 255, 0.04);
-      display: flex;
-      flex-direction: column;
-      flex-shrink: 0;
-      position: sticky;
-      top: 0;
+      background: #2c3e50;
+      color: #ecf0f1;
+      position: fixed;
       height: 100vh;
       overflow-y: auto;
-      z-index: 100;
+      z-index: 1000;
+      transition: transform 0.3s ease;
     }
 
-    .sidebar-head {
-      padding: 20px 20px 16px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-
-    .sidebar-brand {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      text-decoration: none;
-      color: #e8edf5;
-    }
-
-    .sidebar-brand img {
-      width: 38px;
-      height: 38px;
-      border-radius: 10px;
-      background: rgba(96, 165, 250, 0.15);
-      padding: 6px;
-    }
-
-    .brand-text strong {
-      display: block;
-      font-size: 0.85rem;
-      font-weight: 700;
-      letter-spacing: -0.3px;
-    }
-
-    .brand-text small {
-      font-size: 0.6rem;
-      opacity: 0.4;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-
-    .sidebar-close {
-      display: none;
-      color: #e8edf5;
-      font-size: 1.2rem;
-      cursor: pointer;
-    }
-
-    .student-card {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 14px 20px;
-      margin: 12px 16px 8px;
-      background: linear-gradient(135deg, rgba(96, 165, 250, 0.08), rgba(96, 165, 250, 0.02));
-      border-radius: 14px;
-      border: 1px solid rgba(96, 165, 250, 0.06);
-    }
-
-    .avatar {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 36px;
-      height: 36px;
-      border-radius: 50%;
-      background: linear-gradient(135deg, #3b82f6, #6366f1);
-      color: #fff;
-      font-weight: 700;
-      font-size: 0.85rem;
-      flex-shrink: 0;
-    }
-
-    .avatar-lg {
-      width: 44px;
-      height: 44px;
-      font-size: 1rem;
-    }
-
-    .avatar.info {
-      background: linear-gradient(135deg, #3b82f6, #6366f1);
-    }
-
-    .avatar.ok {
-      background: linear-gradient(135deg, #34d399, #6ee7b7);
-    }
-
-    .avatar.amber {
-      background: linear-gradient(135deg, #f59e0b, #fbbf24);
-    }
-
-    .avatar.violet {
-      background: linear-gradient(135deg, #8b5cf6, #a78bfa);
-    }
-
-    .avatar.danger {
-      background: linear-gradient(135deg, #ef4444, #f87171);
-    }
-
-    .avatar.teal {
-      background: linear-gradient(135deg, #14b8a6, #5eead4);
-    }
-
-    .avatar.rose {
-      background: linear-gradient(135deg, #f43f5e, #fb7185);
-    }
-
-    .student-card-text {
+    .td-main {
       flex: 1;
-      min-width: 0;
-    }
-
-    .student-card-text strong {
-      display: block;
-      font-size: 0.85rem;
-      font-weight: 600;
-    }
-
-    .student-card-text small {
-      font-size: 0.65rem;
-      opacity: 0.5;
-      display: block;
-    }
-
-    .verify {
-      color: #34d399;
-      font-size: 0.85rem;
-    }
-
-    .sidebar-nav {
-      flex: 1;
-      padding: 8px 12px 20px;
-      overflow-y: auto;
-    }
-
-    .nav-group {
-      padding: 16px 12px 6px;
-      font-size: 0.6rem;
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
-      opacity: 0.3;
-      font-weight: 600;
-    }
-
-    .nav-item {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 9px 12px;
-      border-radius: 10px;
-      color: #7a8aa8;
-      text-decoration: none;
-      transition: all 0.2s;
-      font-size: 0.85rem;
-      font-weight: 500;
-      position: relative;
-    }
-
-    .nav-item:hover {
-      background: rgba(255, 255, 255, 0.04);
-      color: #e8edf5;
-    }
-
-    .nav-item.active {
-      background: linear-gradient(135deg, rgba(59, 130, 246, 0.12), rgba(99, 102, 241, 0.06));
-      color: #60a5fa;
-    }
-
-    .nav-item.active::before {
-      content: '';
-      position: absolute;
-      left: 0;
-      top: 50%;
-      transform: translateY(-50%);
-      width: 3px;
-      height: 24px;
-      background: linear-gradient(180deg, #3b82f6, #6366f1);
-      border-radius: 0 4px 4px 0;
-    }
-
-    .nav-item i {
-      font-size: 1.1rem;
-      width: 20px;
-      text-align: center;
-      flex-shrink: 0;
-    }
-
-    .nav-item span {
-      flex: 1;
-    }
-
-    .nav-tag {
-      background: rgba(255, 255, 255, 0.06);
-      padding: 1px 10px;
-      border-radius: 12px;
-      font-size: 0.6rem;
-      font-weight: 600;
-    }
-
-    .nav-tag-info {
-      background: rgba(96, 165, 250, 0.15);
-      color: #60a5fa;
-    }
-
-    .nav-tag-warn {
-      background: rgba(251, 191, 36, 0.15);
-      color: #fbbf24;
-    }
-
-    .nav-tag-danger {
-      background: rgba(239, 68, 68, 0.15);
-      color: #f87171;
-    }
-
-    .sidebar-foot {
-      padding: 12px 20px 16px;
-      border-top: 1px solid rgba(255, 255, 255, 0.04);
-      margin-top: auto;
-    }
-
-    .logout-btn {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 9px 12px;
-      border-radius: 10px;
-      color: #f87171;
-      text-decoration: none;
-      transition: all 0.2s;
-      font-size: 0.85rem;
-      font-weight: 500;
-    }
-
-    .logout-btn:hover {
-      background: rgba(239, 68, 68, 0.08);
-    }
-
-    .copy {
-      font-size: 0.6rem;
-      opacity: 0.2;
-      margin: 8px 0 0 12px;
-      letter-spacing: 0.3px;
-    }
-
-    .app-main {
-      flex: 1;
+      margin-left: 260px;
+      background: #f4f6f9;
       min-height: 100vh;
-      background: linear-gradient(180deg, #0d1225 0%, #0a0e1a 100%);
       display: flex;
       flex-direction: column;
     }
 
-    .app-topbar {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      padding: 14px 28px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-      background: rgba(13, 18, 37, 0.8);
-      backdrop-filter: blur(12px);
-      position: sticky;
-      top: 0;
-      z-index: 50;
-      flex-wrap: wrap;
-    }
-
-    .nav-btn {
-      display: none;
-      font-size: 1.4rem;
-      color: #e8edf5;
-      cursor: pointer;
-      background: none;
-      border: none;
-      padding: 4px;
-    }
-
-    .topbar-title {
-      flex: 1;
-      min-width: 120px;
-    }
-
-    .topbar-title h1 {
+    .td-brand {
+      padding: 20px;
       font-size: 1.3rem;
-      font-weight: 700;
-      margin: 0;
-      letter-spacing: -0.5px;
-      background: linear-gradient(135deg, #e8edf5, #94a3b8);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
-
-    .topbar-title .crumbs {
-      font-size: 0.7rem;
-      opacity: 0.35;
-      margin-top: 2px;
-      -webkit-text-fill-color: #94a3b8;
-    }
-
-    .topbar-title .crumbs a {
-      color: #94a3b8;
-      text-decoration: none;
-      -webkit-text-fill-color: #94a3b8;
-    }
-
-    .topbar-title .crumbs a:hover {
-      color: #e8edf5;
-    }
-
-    .topbar-title .crumbs span {
-      margin: 0 4px;
-    }
-
-    .topbar-search {
-      display: flex;
-      align-items: center;
-      background: rgba(255, 255, 255, 0.04);
-      border-radius: 10px;
-      padding: 6px 14px;
-      border: 1px solid rgba(255, 255, 255, 0.04);
-      transition: all 0.3s;
-      min-width: 200px;
-    }
-
-    .topbar-search:focus-within {
-      border-color: rgba(96, 165, 250, 0.3);
-      background: rgba(255, 255, 255, 0.06);
-    }
-
-    .topbar-search i {
-      opacity: 0.3;
-      margin-right: 10px;
-      font-size: 0.9rem;
-    }
-
-    .topbar-search input {
-      background: transparent;
-      border: none;
-      color: #e8edf5;
-      padding: 6px 0;
-      outline: none;
-      width: 100%;
-      font-size: 0.85rem;
-    }
-
-    .topbar-search input::placeholder {
-      color: #4a5a7a;
-    }
-
-    .topbar-actions {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-
-    .icon-btn {
-      position: relative;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 38px;
-      height: 38px;
-      border-radius: 10px;
-      color: #7a8aa8;
-      text-decoration: none;
-      transition: all 0.2s;
-      border: none;
-      background: transparent;
-      cursor: pointer;
-    }
-
-    .icon-btn:hover {
-      background: rgba(255, 255, 255, 0.04);
-      color: #e8edf5;
-    }
-
-    .icon-btn .ping {
-      position: absolute;
-      top: 2px;
-      right: 2px;
-      background: #ef4444;
-      color: #fff;
-      font-size: 0.55rem;
-      padding: 1px 6px;
-      border-radius: 10px;
-      min-width: 18px;
-      text-align: center;
-      font-weight: 700;
-      box-shadow: 0 2px 8px rgba(239, 68, 68, 0.4);
-    }
-
-    .profile-chip {
+      font-weight: bold;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
       display: flex;
       align-items: center;
       gap: 10px;
-      padding: 4px 14px 4px 4px;
-      border-radius: 30px;
-      background: rgba(255, 255, 255, 0.04);
-      color: #e8edf5;
-      text-decoration: none;
-      transition: all 0.2s;
-      cursor: pointer;
-      border: 1px solid rgba(255, 255, 255, 0.04);
     }
 
-    .profile-chip:hover {
-      background: rgba(255, 255, 255, 0.08);
+    .td-brand i {
+      font-size: 1.8rem;
+      color: #3498db;
     }
 
-    .profile-chip .who {
-      line-height: 1.2;
-    }
-
-    .profile-chip .who b {
+    .td-brand small {
       display: block;
-      font-size: 0.8rem;
-      font-weight: 600;
+      font-size: 0.65rem;
+      font-weight: normal;
+      opacity: 0.7;
     }
 
-    .profile-chip .who small {
-      font-size: 0.6rem;
-      opacity: 0.4;
-    }
-
-    .profile-chip .bi-chevron-down {
-      font-size: 0.7rem;
-      opacity: 0.3;
-    }
-
-    .icon-drop {
-      position: relative;
-    }
-
-    .drop-panel {
-      display: none;
-      position: absolute;
-      right: 0;
-      top: calc(100% + 8px);
-      min-width: 280px;
-      background: #141b2b;
-      border: 1px solid rgba(255, 255, 255, 0.06);
-      border-radius: 14px;
-      padding: 6px 0;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
-      z-index: 200;
-      backdrop-filter: blur(20px);
-    }
-
-    .icon-drop:hover .drop-panel {
-      display: block;
-    }
-
-    .drop-head {
-      display: flex;
-      justify-content: space-between;
-      padding: 10px 16px 10px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-      font-size: 0.85rem;
-    }
-
-    .drop-head a {
-      color: #60a5fa;
-      text-decoration: none;
-      font-size: 0.75rem;
-      font-weight: 500;
-    }
-
-    .drop-row {
+    .td-teacher-box {
+      padding: 20px;
       display: flex;
       align-items: center;
       gap: 12px;
-      padding: 10px 16px;
-      color: #e8edf5;
-      text-decoration: none;
-      transition: background 0.2s;
-      font-size: 0.85rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
     }
 
-    .drop-row:hover {
-      background: rgba(255, 255, 255, 0.03);
-    }
-
-    .drop-row p {
-      margin: 0;
-    }
-
-    .drop-row small {
-      font-size: 0.65rem;
-      opacity: 0.4;
-      display: block;
-    }
-
-    .dot-ico {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 32px;
-      height: 32px;
-      border-radius: 8px;
-      background: rgba(255, 255, 255, 0.04);
-      flex-shrink: 0;
-    }
-
-    .dot-ico.p-info {
-      background: rgba(96, 165, 250, 0.12);
-      color: #60a5fa;
-    }
-
-    .dot-ico.p-warn {
-      background: rgba(251, 191, 36, 0.12);
-      color: #fbbf24;
-    }
-
-    .dot-ico.p-danger {
-      background: rgba(239, 68, 68, 0.12);
-      color: #f87171;
-    }
-
-    .dot-ico.p-teal {
-      background: rgba(52, 211, 153, 0.12);
-      color: #34d399;
-    }
-
-    .dot-ico.p-violet {
-      background: rgba(167, 139, 250, 0.12);
-      color: #a78bfa;
-    }
-
-    .dot-ico.p-ok {
-      background: rgba(52, 211, 153, 0.12);
-      color: #34d399;
-    }
-
-    .app-content {
-      padding: 24px 28px 20px;
-      flex: 1;
-      max-width: 1400px;
-      width: 100%;
-      margin: 0 auto;
-    }
-
-    .welcome {
-      background: linear-gradient(135deg, rgba(59, 130, 246, 0.06), rgba(99, 102, 241, 0.03));
-      border-radius: 20px;
-      padding: 28px 32px;
-      border: 1px solid rgba(255, 255, 255, 0.04);
-      position: relative;
-      overflow: hidden;
-    }
-
-    .welcome::before {
-      content: '';
-      position: absolute;
-      top: -50%;
-      right: -20%;
-      width: 400px;
-      height: 400px;
-      background: radial-gradient(circle, rgba(59, 130, 246, 0.04), transparent 70%);
+    .td-avatar {
+      width: 40px;
+      height: 40px;
       border-radius: 50%;
-      pointer-events: none;
+      background: #3498db;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      color: white;
+      font-size: 14px;
+      flex-shrink: 0;
     }
 
-    .welcome .eyebrow {
-      display: inline-block;
-      font-size: 0.65rem;
-      text-transform: uppercase;
-      letter-spacing: 1.5px;
-      opacity: 0.35;
-      font-weight: 600;
-      margin-bottom: 4px;
-    }
-
-    .welcome h2 {
-      font-size: 1.6rem;
-      font-weight: 700;
-      margin: 0 0 6px;
-      letter-spacing: -0.5px;
-    }
-
-    .welcome p {
-      opacity: 0.6;
+    .td-teacher-box h6 {
+      margin: 0;
       font-size: 0.9rem;
+      color: white;
+    }
+
+    .td-teacher-box p {
       margin: 0;
-      max-width: 600px;
-    }
-
-    .welcome p b {
-      color: #60a5fa;
-      opacity: 1;
-    }
-
-    .quick-chips {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-top: 14px;
-    }
-
-    .chip {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 5px 14px;
-      border-radius: 20px;
-      background: rgba(255, 255, 255, 0.04);
-      color: #94a3b8;
-      text-decoration: none;
       font-size: 0.75rem;
-      font-weight: 500;
-      transition: all 0.2s;
-      border: 1px solid rgba(255, 255, 255, 0.04);
+      opacity: 0.7;
     }
 
-    .chip:hover {
-      background: rgba(255, 255, 255, 0.08);
-      color: #e8edf5;
-      border-color: rgba(255, 255, 255, 0.08);
+    .td-nav {
+      padding: 10px 0;
     }
 
-    .chip i {
-      font-size: 0.8rem;
-    }
-
-    .fact {
-      background: rgba(255, 255, 255, 0.03);
-      padding: 12px 14px;
-      border-radius: 12px;
-      text-align: center;
-      border: 1px solid rgba(255, 255, 255, 0.04);
-      height: 100%;
-    }
-
-    .fact small {
-      display: block;
-      font-size: 0.6rem;
-      opacity: 0.3;
+    .td-nav-title {
+      padding: 10px 20px;
+      font-size: 0.7rem;
       text-transform: uppercase;
-      letter-spacing: 0.5px;
-      font-weight: 600;
+      opacity: 0.5;
+      letter-spacing: 1px;
     }
 
-    .fact strong {
-      display: block;
-      font-size: 1.1rem;
-      font-weight: 700;
-      margin: 4px 0 2px;
-      color: #e8edf5;
-    }
-
-    .fact span {
-      font-size: 0.7rem;
-      opacity: 0.4;
-    }
-
-    .card {
-      background: linear-gradient(135deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.005));
-      border: 1px solid rgba(255, 255, 255, 0.04);
-      border-radius: 16px;
-      overflow: hidden;
-      transition: all 0.3s;
-    }
-
-    .card.lift:hover {
-      border-color: rgba(255, 255, 255, 0.08);
-      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
-    }
-
-    .card .card-head {
-      padding: 18px 22px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-
-    .card .card-head h3 {
-      margin: 0;
-      font-size: 1rem;
-      font-weight: 600;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
-
-    .card .card-head h3 .sub {
-      font-size: 0.7rem;
-      opacity: 0.4;
-      font-weight: 400;
-    }
-
-    .card .card-body {
-      padding: 20px 22px;
-    }
-
-    .pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      padding: 2px 12px;
-      border-radius: 20px;
-      font-size: 0.7rem;
-      font-weight: 600;
-      letter-spacing: 0.2px;
-    }
-
-    .pill.p-grey {
-      background: rgba(255, 255, 255, 0.04);
-      color: #5a6a8a;
-    }
-
-    .pill.p-ok {
-      background: rgba(52, 211, 153, 0.12);
-      color: #34d399;
-    }
-
-    .pill.p-warn {
-      background: rgba(251, 191, 36, 0.12);
-      color: #fbbf24;
-    }
-
-    .pill.p-danger {
-      background: rgba(239, 68, 68, 0.12);
-      color: #f87171;
-    }
-
-    .pill.p-info {
-      background: rgba(96, 165, 250, 0.12);
-      color: #60a5fa;
-    }
-
-    .pill.p-teal {
-      background: rgba(52, 211, 153, 0.12);
-      color: #34d399;
-    }
-
-    .pill.p-violet {
-      background: rgba(167, 139, 250, 0.12);
-      color: #a78bfa;
-    }
-
-    .pill.bare {
-      background: transparent;
-      padding: 0 4px;
-    }
-
-    .divider-soft {
-      height: 1px;
-      background: rgba(255, 255, 255, 0.04);
-      margin: 12px 0;
-    }
-
-    /* ===== MESSAGE SPECIFIC STYLES ===== */
-    .mbox-radio {
-      display: none;
-    }
-
-    .mbox-tabs {
-      display: flex;
-      gap: 4px;
-      padding: 4px;
-      background: rgba(255, 255, 255, 0.03);
-      border-radius: 12px;
-      margin-bottom: 20px;
-      flex-wrap: wrap;
-    }
-
-    .mbox-tabs label {
-      padding: 8px 18px;
-      border-radius: 8px;
-      font-size: 0.85rem;
-      font-weight: 500;
-      color: #7a8aa8;
-      cursor: pointer;
-      transition: all 0.2s;
-      flex: 0 1 auto;
-    }
-
-    .mbox-tabs label:hover {
-      background: rgba(255, 255, 255, 0.04);
-      color: #e8edf5;
-    }
-
-    .mbox-radio:checked+.mbox-tabs label,
-    .mbox-radio:checked~.mbox-tabs label {
-      background: rgba(255, 255, 255, 0.06);
-      color: #e8edf5;
-    }
-
-    .mbox-radio#mInbox:checked~.mbox-tabs label[for="mInbox"] {
-      background: rgba(255, 255, 255, 0.06);
-      color: #e8edf5;
-    }
-
-    .mbox-radio#mSent:checked~.mbox-tabs label[for="mSent"] {
-      background: rgba(255, 255, 255, 0.06);
-      color: #e8edf5;
-    }
-
-    .mbox-radio#mDraft:checked~.mbox-tabs label[for="mDraft"] {
-      background: rgba(255, 255, 255, 0.06);
-      color: #e8edf5;
-    }
-
-    .pane {
-      display: none;
-    }
-
-    .mbox-radio#mInbox:checked~.mbox-panels .pane-inbox {
-      display: block;
-    }
-
-    .mbox-radio#mSent:checked~.mbox-panels .pane-sent {
-      display: block;
-    }
-
-    .mbox-radio#mDraft:checked~.mbox-panels .pane-draft {
-      display: block;
-    }
-
-    .msg-row {
+    .td-nav a {
       display: flex;
       align-items: center;
       gap: 12px;
-      padding: 12px 0;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      padding: 10px 20px;
+      color: rgba(255, 255, 255, 0.7);
+      text-decoration: none;
+      transition: all 0.3s;
+      border-left: 3px solid transparent;
+    }
+
+    .td-nav a:hover {
+      background: rgba(255, 255, 255, 0.05);
+      color: white;
+    }
+
+    .td-nav a.active {
+      background: rgba(52, 152, 219, 0.2);
+      color: white;
+      border-left-color: #3498db;
+    }
+
+    .td-nav a.logout {
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      margin-top: 10px;
+      color: #e74c3c;
+    }
+
+    .td-nav a.logout:hover {
+      background: rgba(231, 76, 60, 0.1);
+    }
+
+    .td-nav a i {
+      width: 20px;
+    }
+
+    .td-navbar {
+      background: white;
+      padding: 15px 25px;
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      flex-wrap: wrap;
+    }
+
+    .td-burger {
+      font-size: 1.5rem;
+      cursor: pointer;
+      display: none;
+    }
+
+    .td-page-title {
+      font-size: 1.2rem;
+      margin: 0;
+    }
+
+    .td-page-title small {
+      font-size: 0.75rem;
+      color: #6c757d;
+      font-weight: normal;
+    }
+
+    .td-search {
+      min-width: 200px;
+    }
+
+    .td-icon-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #f8f9fa;
+      color: #333;
+      text-decoration: none;
+      position: relative;
+      transition: background 0.3s;
+    }
+
+    .td-icon-btn:hover {
+      background: #e9ecef;
+      color: #333;
+    }
+
+    .td-dot {
+      width: 8px;
+      height: 8px;
+      background: #e74c3c;
+      border-radius: 50%;
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      border: 2px solid white;
+    }
+
+    .td-content {
+      padding: 25px;
+      flex: 1;
+    }
+
+    .td-footer {
+      background: white;
+      padding: 15px 25px;
+      text-align: center;
+      font-size: 0.85rem;
+      color: #6c757d;
+      border-top: 1px solid #e9ecef;
+    }
+
+    .stat-card {
+      padding: 15px;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      background: white;
+      transition: transform 0.2s;
+      border: none;
+    }
+
+    .stat-card:hover {
+      transform: translateY(-2px);
+    }
+
+    .stat-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 24px;
+      flex-shrink: 0;
+    }
+
+    .stat-card h3 {
+      margin: 0;
+      font-size: 1.5rem;
+    }
+
+    .stat-card p {
+      margin: 0;
+      color: #6c757d;
+      font-size: 0.85rem;
+    }
+
+    .msg-tabs .nav-link {
+      border-radius: 8px;
+      padding: 8px 16px;
+      font-size: 0.9rem;
+    }
+
+    .msg-tabs .nav-link.active {
+      background: #0d6efd;
+      color: white;
+    }
+
+    .msg-tabs .nav-link:not(.active) {
+      background: white;
+      color: #333;
+    }
+
+    .msg-item {
       cursor: pointer;
       transition: background 0.2s;
     }
 
-    .msg-row:hover {
-      background: rgba(255, 255, 255, 0.02);
-      margin: 0 -8px;
-      padding: 12px 8px;
-      border-radius: 8px;
+    .msg-item:hover {
+      background: #f0f4ff;
     }
 
-    .msg-row.unread {
-      background: rgba(96, 165, 250, 0.04);
-      margin: 0 -8px;
-      padding: 12px 8px;
-      border-radius: 8px;
-    }
-
-    .msg-row .msg-body-col {
-      flex: 1;
-      min-width: 0;
-    }
-
-    .msg-row .msg-body-col h4 {
-      font-size: 0.9rem;
+    .msg-item.unread {
       font-weight: 600;
-      margin: 0 0 2px;
     }
 
-    .msg-row .msg-body-col p {
-      font-size: 0.8rem;
-      opacity: 0.5;
-      margin: 0;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .msg-row .msg-meta {
-      font-size: 0.7rem;
-      opacity: 0.4;
-      text-align: right;
-      flex-shrink: 0;
-      min-width: 70px;
-    }
-
-    .msg-row .msg-meta .d-block {
-      display: block;
-    }
-
-    .thread-head {
-      padding: 20px 22px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-    }
-
-    .thread-body {
-      padding: 20px 22px;
-      font-size: 0.9rem;
-      line-height: 1.7;
-      opacity: 0.8;
-    }
-
-    .thread-body p {
-      margin-bottom: 12px;
-    }
-
-    .thread-body p:last-child {
-      margin-bottom: 0;
-    }
-
-    .alert-soft {
+    .chat-container {
       display: flex;
-      align-items: flex-start;
-      gap: 12px;
-      padding: 14px 18px;
-      border-radius: 12px;
-      background: rgba(52, 211, 153, 0.06);
-      border-left: 3px solid #34d399;
-      font-size: 0.85rem;
+      flex-direction: column;
+      height: 500px;
     }
 
-    .alert-soft i {
-      color: #34d399;
-      font-size: 1.1rem;
-      margin-top: 2px;
-      flex-shrink: 0;
-    }
-
-    .alert-soft.teal {
-      background: rgba(52, 211, 153, 0.06);
-      border-left-color: #34d399;
-    }
-
-    .alert-soft.teal i {
-      color: #34d399;
-    }
-
-    .form-label {
-      font-size: 0.8rem;
-      font-weight: 500;
-      opacity: 0.6;
-      margin-bottom: 4px;
-    }
-
-    .form-control,
-    .form-select {
-      background: rgba(255, 255, 255, 0.04);
-      border: 1px solid rgba(255, 255, 255, 0.06);
-      color: #e8edf5;
-      border-radius: 10px;
-      padding: 10px 14px;
-      font-size: 0.85rem;
-      transition: all 0.2s;
-    }
-
-    .form-control:focus,
-    .form-select:focus {
-      background: rgba(255, 255, 255, 0.06);
-      border-color: rgba(96, 165, 250, 0.3);
-      box-shadow: none;
-      color: #e8edf5;
-    }
-
-    .form-control::placeholder {
-      color: #4a5a7a;
-    }
-
-    .form-select option {
-      background: #141b2b;
-      color: #e8edf5;
-    }
-
-    .btn-outline {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 20px;
-      border-radius: 10px;
-      border: 1px solid rgba(255, 255, 255, 0.06);
-      color: #94a3b8;
-      text-decoration: none;
-      transition: all 0.2s;
-      background: transparent;
-      font-size: 0.85rem;
-      font-weight: 500;
-      cursor: pointer;
-    }
-
-    .btn-outline:hover {
-      background: rgba(255, 255, 255, 0.04);
-      border-color: rgba(255, 255, 255, 0.12);
-      color: #e8edf5;
-    }
-
-    .btn-solid {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 20px;
-      border-radius: 10px;
-      background: linear-gradient(135deg, #3b82f6, #6366f1);
-      color: #fff;
-      text-decoration: none;
-      transition: all 0.2s;
-      border: none;
-      font-size: 0.85rem;
-      font-weight: 500;
-      cursor: pointer;
-    }
-
-    .btn-solid:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 8px 25px rgba(59, 130, 246, 0.3);
-    }
-
-    .w-100 {
-      width: 100%;
-    }
-
-    .justify-content-center {
-      justify-content: center;
-    }
-
-    .gap-2 {
-      gap: 8px;
-    }
-
-    .gap-3 {
-      gap: 16px;
-    }
-
-    .mt-2 {
-      margin-top: 8px;
-    }
-
-    .mt-4 {
-      margin-top: 24px;
-    }
-
-    .mb-0 {
-      margin-bottom: 0;
-    }
-
-    .mb-1 {
-      margin-bottom: 4px;
-    }
-
-    .mb-3 {
-      margin-bottom: 16px;
-    }
-
-    .me-1 {
-      margin-right: 4px;
-    }
-
-    .ms-1 {
-      margin-left: 4px;
-    }
-
-    .d-block {
-      display: block;
-    }
-
-    .d-flex {
-      display: flex;
-    }
-
-    .flex-wrap {
-      flex-wrap: wrap;
-    }
-
-    .align-items-start {
-      align-items: flex-start;
-    }
-
-    .align-items-center {
-      align-items: center;
-    }
-
-    .justify-content-between {
-      justify-content: space-between;
-    }
-
-    .flex-1 {
+    .chat-messages {
       flex: 1;
+      overflow-y: auto;
+      padding: 15px;
+      background: #f8f9fa;
+      border-radius: 8px;
     }
 
-    .min-width-0 {
-      min-width: 0;
+    .chat-message {
+      margin-bottom: 15px;
+      max-width: 70%;
     }
 
-    .text-center {
-      text-align: center;
+    .chat-message.sent {
+      margin-left: auto;
     }
 
-    .page-foot {
-      padding: 16px 28px;
-      border-top: 1px solid rgba(255, 255, 255, 0.04);
-      display: flex;
-      justify-content: space-between;
-      flex-wrap: wrap;
-      gap: 8px;
-      font-size: 0.75rem;
-      opacity: 0.25;
-      margin-top: auto;
+    .chat-message.received {
+      margin-right: auto;
     }
 
-    .page-foot a {
-      color: #94a3b8;
-      text-decoration: none;
-      transition: color 0.2s;
+    .chat-message .message-bubble {
+      padding: 10px 15px;
+      border-radius: 12px;
+      position: relative;
     }
 
-    .page-foot a:hover {
-      color: #e8edf5;
+    .chat-message.sent .message-bubble {
+      background: #0d6efd;
+      color: white;
     }
 
-    .page-foot .d-flex {
-      display: flex;
-      gap: 16px;
+    .chat-message.received .message-bubble {
+      background: white;
+      border: 1px solid #dee2e6;
     }
 
-    .nav-toggle {
+    .chat-message .message-time {
+      font-size: 0.7rem;
+      opacity: 0.7;
+      margin-top: 4px;
+      display: block;
+    }
+
+    .chat-input {
+      padding: 10px;
+      background: white;
+      border-radius: 8px;
+      border: 1px solid #dee2e6;
+    }
+
+    .bg-grad-1 {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+
+    .bg-grad-2 {
+      background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+    }
+
+    .bg-grad-3 {
+      background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    }
+
+    .bg-grad-4 {
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    }
+
+    .bg-grad-5 {
+      background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+    }
+
+    .bg-grad-6 {
+      background: linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%);
+    }
+
+    .td-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 999;
+    }
+
+    #tdSidebarToggle {
       display: none;
     }
 
-    .nav-backdrop {
-      display: none;
+    #tdSidebarToggle:checked~.td-overlay {
+      display: block;
+    }
+
+    #tdSidebarToggle:checked~.td-sidebar {
+      transform: translateX(0);
     }
 
     @media (max-width: 992px) {
-      .app-sidebar {
-        position: fixed;
-        left: -280px;
-        top: 0;
-        bottom: 0;
-        width: 280px;
-        z-index: 1000;
-        transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        display: flex;
-        flex-direction: column;
-        border-right: none;
-        box-shadow: 0 0 40px rgba(0, 0, 0, 0.5);
+      .td-sidebar {
+        transform: translateX(-100%);
       }
 
-      .nav-toggle:checked~.app-sidebar {
-        left: 0;
+      .td-main {
+        margin-left: 0;
       }
 
-      .nav-toggle:checked~.nav-backdrop {
+      .td-burger {
         display: block;
-        position: fixed;
-        inset: 0;
-        background: rgba(0, 0, 0, 0.6);
-        z-index: 999;
-        backdrop-filter: blur(4px);
       }
 
-      .sidebar-close {
-        display: inline-flex;
+      #tdSidebarToggle:checked~.td-sidebar {
+        transform: translateX(0);
       }
 
-      .nav-btn {
-        display: inline-flex;
-      }
-
-      .app-topbar {
-        padding: 12px 16px;
-      }
-
-      .app-content {
-        padding: 16px;
-      }
-
-      .welcome {
-        padding: 20px;
-      }
-
-      .welcome h2 {
-        font-size: 1.3rem;
-      }
-
-      .topbar-search {
-        min-width: 120px;
-      }
-
-      .profile-chip .who {
-        display: none;
-      }
-
-      .card .card-head {
-        padding: 14px 16px;
-      }
-
-      .card .card-body {
-        padding: 14px 16px;
-      }
-
-      .page-foot {
-        flex-direction: column;
-        text-align: center;
-        padding: 12px 16px;
-      }
-
-      .topbar-actions .icon-drop:not(:last-child) {
-        display: none;
-      }
-
-      .topbar-title h1 {
-        font-size: 1.1rem;
-      }
-
-      .msg-row .msg-meta {
-        font-size: 0.6rem;
-        min-width: 50px;
-      }
-
-      .thread-head {
-        padding: 14px 16px;
-      }
-
-      .thread-body {
-        padding: 14px 16px;
-      }
-
-      .mbox-tabs label {
-        font-size: 0.75rem;
-        padding: 6px 12px;
-      }
-
-      .col-xl-5 {
-        margin-bottom: 16px;
+      .td-search {
+        min-width: 150px;
       }
     }
 
     @media (max-width: 576px) {
-      .welcome .row .col-lg-8 {
-        margin-bottom: 16px;
+      .td-navbar {
+        padding: 10px 15px;
       }
 
-      .fact {
-        padding: 8px 10px;
+      .td-content {
+        padding: 15px;
       }
 
-      .fact strong {
-        font-size: 0.95rem;
+      .td-search {
+        min-width: 100px;
+        order: 10;
+        width: 100%;
       }
 
-      .quick-chips .chip {
-        font-size: 0.7rem;
-        padding: 4px 10px;
+      .stat-card {
+        padding: 10px;
+        gap: 10px;
       }
 
-      .card .card-head h3 {
-        font-size: 0.9rem;
-      }
-
-      .card .card-head h3 .sub {
-        font-size: 0.6rem;
-      }
-
-      .pill {
-        font-size: 0.6rem;
-        padding: 1px 8px;
-      }
-
-      .msg-row {
-        padding: 10px 0;
-      }
-
-      .msg-row .msg-body-col h4 {
-        font-size: 0.8rem;
-      }
-
-      .msg-row .msg-body-col p {
-        font-size: 0.7rem;
-      }
-
-      .msg-row .msg-meta {
-        font-size: 0.55rem;
-        min-width: 40px;
-      }
-
-      .thread-body {
-        font-size: 0.8rem;
-      }
-
-      .btn-solid,
-      .btn-outline {
-        font-size: 0.75rem;
-        padding: 6px 14px;
-      }
-
-      .mbox-tabs {
-        gap: 2px;
-      }
-
-      .mbox-tabs label {
-        font-size: 0.65rem;
-        padding: 4px 10px;
-      }
-
-      .avatar-lg {
+      .stat-icon {
         width: 36px;
         height: 36px;
-        font-size: 0.8rem;
-      }
-    }
-
-    @media print {
-
-      .app-sidebar,
-      .app-topbar,
-      .page-foot {
-        display: none !important;
+        font-size: 18px;
       }
 
-      .app-main {
-        background: white !important;
-        color: black !important;
-        padding: 0 !important;
-        margin: 0 !important;
+      .stat-card h3 {
+        font-size: 1.2rem;
       }
 
-      .app-content {
-        padding: 20px !important;
-        max-width: 100% !important;
-      }
-
-      .card {
-        border: 1px solid #ddd !important;
-        background: white !important;
-        box-shadow: none !important;
-        margin-bottom: 16px !important;
-        page-break-inside: avoid !important;
-      }
-
-      .card .card-head {
-        border-bottom: 2px solid #ddd !important;
-        padding: 12px 16px !important;
-      }
-
-      .card .card-head h3 {
-        color: #333 !important;
-      }
-
-      .card .card-head h3 .sub {
-        color: #666 !important;
-        opacity: 1 !important;
-      }
-
-      .card .card-body {
-        padding: 16px !important;
-      }
-
-      .welcome {
-        border: 1px solid #ddd !important;
-        background: #f9f9f9 !important;
-        padding: 20px !important;
-        border-radius: 8px !important;
-      }
-
-      .welcome h2 {
-        color: #333 !important;
-      }
-
-      .welcome p {
-        color: #555 !important;
-        opacity: 1 !important;
-      }
-
-      .welcome .eyebrow {
-        color: #666 !important;
-        opacity: 1 !important;
-      }
-
-      .fact {
-        border: 1px solid #ddd !important;
-        background: #f9f9f9 !important;
-      }
-
-      .fact strong {
-        color: #333 !important;
-      }
-
-      .fact small {
-        color: #666 !important;
-        opacity: 1 !important;
-      }
-
-      .fact span {
-        color: #666 !important;
-        opacity: 1 !important;
-      }
-
-      .pill {
-        background: #eee !important;
-        color: #333 !important;
-        border: 1px solid #ddd !important;
-      }
-
-      .msg-row {
-        border-bottom: 1px solid #eee !important;
-      }
-
-      .msg-row .msg-body-col h4 {
-        color: #333 !important;
-      }
-
-      .msg-row .msg-body-col p {
-        color: #555 !important;
-        opacity: 1 !important;
-      }
-
-      .msg-row .msg-meta {
-        color: #666 !important;
-        opacity: 1 !important;
-      }
-
-      .thread-head {
-        border-bottom: 2px solid #ddd !important;
-      }
-
-      .thread-head h3 {
-        color: #333 !important;
-      }
-
-      .thread-body {
-        color: #333 !important;
-        opacity: 1 !important;
-      }
-
-      .avatar {
-        border: 1px solid #ddd !important;
-      }
-
-      .form-control,
-      .form-select {
-        border: 1px solid #ddd !important;
-        color: #333 !important;
-        background: #f9f9f9 !important;
+      .chat-message {
+        max-width: 85%;
       }
     }
   </style>
 </head>
 
 <body>
+  <input type="checkbox" id="tdSidebarToggle">
+  <div class="td-wrapper">
+    <label for="tdSidebarToggle" class="td-overlay"></label>
 
-  <input type="checkbox" id="navToggle" class="nav-toggle" />
-  <label for="navToggle" class="nav-backdrop" aria-hidden="true"></label>
-
-  <!-- ===== SIDEBAR ===== -->
-  <aside class="app-sidebar">
-    <div class="sidebar-head">
-      <a href="index.php" class="sidebar-brand">
-        <img src="assets/images/logo.svg" alt="Crescent Public School logo" />
-        <span class="brand-text"><strong>Crescent Public School</strong><small>Student Portal</small></span>
-      </a>
-      <label for="navToggle" class="sidebar-close" aria-label="Close navigation"><i class="bi bi-x-lg"></i></label>
-    </div>
-
-    <div class="student-card">
-      <span class="avatar avatar-lg">
-        <?php echo $studentInitials; ?>
-      </span>
-      <div class="student-card-text">
-        <strong>
-          <?php echo $studentName; ?>
-        </strong>
-        <small>
-          <?php echo $studentClass . ' · ' . $studentUID; ?>
-        </small>
+    <aside class="td-sidebar">
+      <div class="td-brand">
+        <i class="bi bi-mortarboard-fill"></i>
+        <span>Bright Future<small>School Portal</small></span>
       </div>
-      <span class="verify" title="Verified student"><i class="bi bi-patch-check-fill"></i></span>
-    </div>
-
-    <nav class="sidebar-nav">
-      <p class="nav-group">Overview</p>
-      <a class="nav-item" href="index.php"><i class="bi bi-columns-gap"></i><span>Dashboard</span></a>
-
-      <p class="nav-group">Academics</p>
-      <a class="nav-item" href="subjects.php"><i class="bi bi-journal-bookmark"></i><span>My Subjects</span></a>
-      <a class="nav-item" href="timetable.php"><i class="bi bi-calendar-week"></i><span>My Timetable</span></a>
-      <a class="nav-item" href="attendance.php"><i class="bi bi-check2-square"></i><span>My Attendance</span></a>
-      <a class="nav-item" href="assignments.php"><i class="bi bi-journal-text"></i><span>Assignments</span></a>
-      <a class="nav-item" href="exams.php"><i class="bi bi-pencil-square"></i><span>Exams</span></a>
-      <a class="nav-item" href="results.php"><i class="bi bi-graph-up-arrow"></i><span>Results</span></a>
-
-      <p class="nav-group">Finance</p>
-      <a class="nav-item" href="fees.php"><i class="bi bi-wallet2"></i><span>Fees</span></a>
-
-      <p class="nav-group">School Life</p>
-      <a class="nav-item" href="notices.php"><i class="bi bi-megaphone"></i><span>Notices</span></a>
-      <a class="nav-item" href="events.php"><i class="bi bi-calendar2-heart"></i><span>Events</span></a>
-      <a class="nav-item active" href="messages.php"><i class="bi bi-envelope"></i><span>Messages</span><em
-          class="nav-tag nav-tag-danger">
-          <?php echo $unreadCount; ?>
-        </em></a>
-
-      <p class="nav-group">Account</p>
-      <a class="nav-item" href="profile.php"><i class="bi bi-person-badge"></i><span>My Profile</span></a>
-      <a class="nav-item" href="settings.php"><i class="bi bi-gear"></i><span>Settings</span></a>
-    </nav>
-
-    <div class="sidebar-foot">
-      <a href="#" class="logout-btn"><i class="bi bi-box-arrow-right"></i><span>Logout</span></a>
-      <p class="copy">Portal v2.6 &middot; Session 2026&ndash;27</p>
-    </div>
-  </aside>
-
-  <!-- ===== MAIN CONTENT ===== -->
-  <div class="app-main">
-
-    <!-- ===== TOPBAR ===== -->
-    <header class="app-topbar">
-      <label for="navToggle" class="nav-btn" aria-label="Open navigation"><i class="bi bi-list"></i></label>
-      <div class="topbar-title">
-        <h1>Messages</h1>
-        <div class="crumbs"><a href="index.php">Home</a><span>/</span>School Life<span>/</span>Messages</div>
-      </div>
-      <div class="topbar-search">
-        <i class="bi bi-search"></i>
-        <input type="search" placeholder="Search conversations…" aria-label="Search" />
-      </div>
-      <div class="topbar-actions">
-        <div class="icon-drop">
-          <a href="notices.php" class="icon-btn" aria-label="Notifications">
-            <i class="bi bi-bell"></i>
-            <span class="ping">
-              <?php echo min($unreadCount + 2, 9); ?>
-            </span>
-          </a>
-          <div class="drop-panel">
-            <div class="drop-head"><strong>Notifications</strong><a href="notices.php">View all</a></div>
-            <?php if (!empty($inboxMessages)): ?>
-              <?php foreach (array_slice($inboxMessages, 0, 3) as $msg): ?>
-                <a href="messages.php" class="drop-row">
-                  <i class="dot-ico <?php echo $msg['sender_color']; ?>"><i class="bi bi-envelope"></i></i>
-                  <span>
-                    <p>
-                      <?php echo htmlspecialchars(substr($msg['subject'] ?? 'New Message', 0, 30)) . (strlen($msg['subject'] ?? '') > 30 ? '...' : ''); ?>
-                    </p>
-                    <small>
-                      <?php echo $msg['sender_name'] ?? 'Unknown'; ?> &middot;
-                      <?php echo $msg['time_ago'] ?? 'Today'; ?>
-                    </small>
-                  </span>
-                </a>
-              <?php endforeach; ?>
-            <?php else: ?>
-              <div class="drop-row"><span>
-                  <p style="opacity:0.4;">No new notifications</p>
-                </span></div>
-            <?php endif; ?>
-          </div>
+      <div class="td-teacher-box">
+        <div class="td-avatar">
+          <?php echo $teacher_initials; ?>
         </div>
-        <div class="icon-drop">
-          <a href="messages.php" class="icon-btn" aria-label="Messages">
-            <i class="bi bi-envelope-open"></i>
-            <span class="ping">
-              <?php echo $unreadCount; ?>
-            </span>
-          </a>
-          <div class="drop-panel">
-            <div class="drop-head"><strong>Unread</strong><a href="messages.php">Open inbox</a></div>
-            <?php
-            $unreadMessages = array_filter($inboxMessages, function ($msg) {
-              return $msg['is_read'] == 0;
-            });
-            ?>
-            <?php if (!empty($unreadMessages)): ?>
-              <?php foreach (array_slice($unreadMessages, 0, 3) as $msg): ?>
-                <a href="messages.php" class="drop-row">
-                  <span class="avatar <?php echo $msg['sender_color'] ?? 'info'; ?>">
-                    <?php echo getInitials($msg['sender_name'] ?? 'U'); ?>
-                  </span>
-                  <span>
-                    <p>
-                      <?php echo htmlspecialchars($msg['sender_name'] ?? 'Unknown'); ?> &middot;
-                      <?php echo htmlspecialchars(substr($msg['subject'] ?? 'New Message', 0, 20)); ?>
-                    </p>
-                    <small>
-                      <?php echo $msg['time_ago'] ?? 'Today'; ?>
-                    </small>
-                  </span>
-                </a>
-              <?php endforeach; ?>
-            <?php else: ?>
-              <div class="drop-row"><span>
-                  <p style="opacity:0.4;">No unread messages</p>
-                </span></div>
-            <?php endif; ?>
-          </div>
-        </div>
-        <div class="icon-drop">
-          <a href="profile.php" class="profile-chip">
-            <span class="avatar">
-              <?php echo $studentInitials; ?>
-            </span>
-            <span class="who"><b>
-                <?php echo htmlspecialchars($student['first_name'] ?? 'Ahmed'); ?>
-              </b><small>
-                <?php echo $studentClass; ?>
-              </small></span>
-            <i class="bi bi-chevron-down"></i>
-          </a>
-          <div class="drop-panel">
-            <div class="drop-head"><strong>
-                <?php echo $studentName; ?>
-              </strong><span class="pill p-ok">Active</span></div>
-            <a href="profile.php" class="drop-row"><i class="dot-ico p-teal"><i
-                  class="bi bi-person-badge"></i></i><span>
-                <p>My Profile</p><small>
-                  <?php echo $studentUID; ?>
-                </small>
-              </span></a>
-            <a href="settings.php" class="drop-row"><i class="dot-ico p-violet"><i class="bi bi-gear"></i></i><span>
-                <p>Settings</p><small>Preferences &amp; alerts</small>
-              </span></a>
-            <a href="#" class="drop-row"><i class="dot-ico p-danger"><i class="bi bi-box-arrow-right"></i></i><span>
-                <p>Logout</p><small>End this session</small>
-              </span></a>
-          </div>
+        <div>
+          <h6>
+            <?php echo htmlspecialchars($teacher_name); ?>
+          </h6>
+          <p>Mathematics Teacher</p>
         </div>
       </div>
-    </header>
+      <nav class="td-nav">
+        <div class="td-nav-title">Main</div>
+        <a href="index.php"><i class="bi bi-speedometer2"></i> Dashboard</a>
+        <a href="students.php"><i class="bi bi-people"></i> My Students</a>
+        <a href="attendance.php"><i class="bi bi-calendar2-check"></i> Attendance</a>
+        <a href="subjects.php"><i class="bi bi-journal-bookmark"></i> My Subjects</a>
+        <a href="timetable.php"><i class="bi bi-clock-history"></i> My Timetable</a>
+        <div class="td-nav-title">Academics</div>
+        <a href="assignments.php"><i class="bi bi-file-earmark-text"></i> Assignments</a>
+        <a href="exams.php"><i class="bi bi-pencil-square"></i> Exams</a>
+        <a href="results.php"><i class="bi bi-bar-chart-line"></i> Results</a>
+        <div class="td-nav-title">Communication</div>
+        <a href="notices.php"><i class="bi bi-megaphone"></i> Notices</a>
+        <a href="messages.php" class="active"><i class="bi bi-chat-dots"></i> Messages</a>
+        <div class="td-nav-title">Account</div>
+        <a href="profile.php"><i class="bi bi-person-badge"></i> My Profile</a>
+        <a href="settings.php"><i class="bi bi-gear"></i> Settings</a>
+        <a href="#" class="logout"><i class="bi bi-box-arrow-right"></i> Logout</a>
+      </nav>
+    </aside>
 
-    <!-- ===== CONTENT ===== -->
-    <main class="app-content">
+    <div class="td-main">
+      <header class="td-navbar">
+        <label for="tdSidebarToggle" class="td-burger"><i class="bi bi-list"></i></label>
+        <h1 class="td-page-title">Messages <small>Inbox and conversations</small></h1>
+        <div class="td-search ms-auto">
+          <form method="GET" action="" class="d-flex">
+            <div class="input-group">
+              <span class="input-group-text bg-white border-end-0"><i class="bi bi-search"></i></span>
+              <input type="search" name="search" class="form-control border-start-0" placeholder="Search messages..."
+                value="<?php echo htmlspecialchars($search); ?>">
+              <input type="hidden" name="tab" value="<?php echo htmlspecialchars($tab); ?>">
+            </div>
+          </form>
+        </div>
+        <a href="notices.php" class="td-icon-btn"><i class="bi bi-bell"></i><span class="td-dot"></span></a>
+        <a href="profile.php" class="d-flex align-items-center gap-2 text-dark text-decoration-none">
+          <span class="td-avatar">
+            <?php echo $teacher_initials; ?>
+          </span>
+          <span class="d-none d-md-block">
+            <strong class="d-block" style="font-size:.85rem">
+              <?php echo htmlspecialchars($teacher_name); ?>
+            </strong>
+            <small class="text-muted" style="font-size:.72rem">Mathematics Teacher</small>
+          </span>
+        </a>
+      </header>
 
-      <!-- ===== DEBUG INFO (Remove after testing) ===== -->
-      <div
-        style="background:rgba(255,255,255,0.05);padding:12px 16px;border-radius:10px;margin-bottom:16px;font-size:0.8rem;color:#94a3b8;border:1px solid rgba(255,255,255,0.05);">
-        <i class="bi bi-info-circle"></i>
-        <b>Debug:</b> Found <b>
-          <?php echo $inboxCount; ?>
-        </b> inbox messages, <b>
-          <?php echo $sentCount; ?>
-        </b> sent messages.
-        <?php if ($inboxCount == 0 && $sentCount == 0): ?>
-          <span style="color:#f87171;">No messages found! Please add sample data to the messages table.</span>
-        <?php else: ?>
-          <span style="color:#34d399;">Messages loaded successfully!</span>
+      <main class="td-content">
+        <?php if (isset($success_message)): ?>
+          <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <i class="bi bi-check-circle me-2"></i>
+            <?php echo $success_message; ?>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+          </div>
         <?php endif; ?>
-      </div>
+        <?php if (isset($error_message)): ?>
+          <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="bi bi-exclamation-triangle me-2"></i>
+            <?php echo $error_message; ?>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+          </div>
+        <?php endif; ?>
 
-      <!-- ===== WELCOME SECTION ===== -->
-      <section class="welcome rise">
-        <div class="row g-4 align-items-center">
-          <div class="col-lg-8">
-            <span class="eyebrow">Inbox &middot; Secure school messaging</span>
-            <h2>
-              <?php echo $unreadCount; ?> unread
-              <?php echo $unreadCount == 1 ? 'message' : 'messages'; ?> waiting
-            </h2>
-            <p>Communicate directly with subject teachers, your class teacher and the school office. Switch between
-              Inbox, Sent and Drafts using the tabs below &mdash; no page reload required.</p>
-            <div class="quick-chips">
-              <a href="attendance.php" class="chip"><i class="bi bi-envelope-plus"></i> Apply for Leave</a>
-              <a href="assignments.php" class="chip"><i class="bi bi-chat-dots"></i> Ask about Homework</a>
-              <a href="fees.php" class="chip"><i class="bi bi-wallet2"></i> Accounts Query</a>
+        <div class="row g-3 mb-4">
+          <div class="col-6 col-xl-3">
+            <div class="card stat-card">
+              <div class="stat-icon bg-grad-1"><i class="bi bi-inbox"></i></div>
+              <div>
+                <h3>
+                  <?php echo $stats['inbox'] ?? 0; ?>
+                </h3>
+                <p>Inbox</p>
+              </div>
             </div>
           </div>
-          <div class="col-lg-4">
-            <div class="row g-2">
-              <div class="col-6">
-                <div class="fact">
-                  <small>Inbox</small>
-                  <strong>
-                    <?php echo str_pad($inboxCount, 2, '0', STR_PAD_LEFT); ?>
-                  </strong>
-                  <span>
-                    <?php echo $unreadCount; ?> unread
-                  </span>
-                </div>
+          <div class="col-6 col-xl-3">
+            <div class="card stat-card">
+              <div class="stat-icon bg-grad-2"><i class="bi bi-send"></i></div>
+              <div>
+                <h3>
+                  <?php echo $stats['sent'] ?? 0; ?>
+                </h3>
+                <p>Sent</p>
               </div>
-              <div class="col-6">
-                <div class="fact">
-                  <small>Sent</small>
-                  <strong>
-                    <?php echo str_pad($sentCount, 2, '0', STR_PAD_LEFT); ?>
-                  </strong>
-                  <span>This term</span>
-                </div>
+            </div>
+          </div>
+          <div class="col-6 col-xl-3">
+            <div class="card stat-card">
+              <div class="stat-icon bg-grad-3"><i class="bi bi-envelope-exclamation"></i></div>
+              <div>
+                <h3>
+                  <?php echo $stats['unread'] ?? 0; ?>
+                </h3>
+                <p>Unread</p>
               </div>
-              <div class="col-6">
-                <div class="fact">
-                  <small>Drafts</small>
-                  <strong>
-                    <?php echo str_pad($draftCount, 2, '0', STR_PAD_LEFT); ?>
-                  </strong>
-                  <span>Unsent</span>
-                </div>
-              </div>
-              <div class="col-6">
-                <div class="fact">
-                  <small>Avg. Reply</small>
-                  <strong>&lt; 1 day</strong>
-                  <span>From staff</span>
-                </div>
+            </div>
+          </div>
+          <div class="col-6 col-xl-3">
+            <div class="card stat-card">
+              <div class="stat-icon bg-grad-5"><i class="bi bi-chat-dots"></i></div>
+              <div>
+                <h3>
+                  <?php echo count($messages); ?>
+                </h3>
+                <p>Total Messages</p>
               </div>
             </div>
           </div>
         </div>
-      </section>
 
-      <!-- ===== MESSAGES ===== -->
-      <section class="mt-4 rise">
+        <ul class="nav nav-pills msg-tabs mb-3 gap-2">
+          <li class="nav-item">
+            <a class="nav-link <?php echo $tab == 'inbox' ? 'active' : 'bg-white'; ?>" href="?tab=inbox">
+              <i class="bi bi-inbox me-1"></i> Inbox
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link <?php echo $tab == 'sent' ? 'active' : 'bg-white'; ?>" href="?tab=sent">
+              <i class="bi bi-send me-1"></i> Sent
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link <?php echo $tab == 'unread' ? 'active' : 'bg-white'; ?>" href="?tab=unread">
+              <i class="bi bi-envelope-exclamation me-1"></i> Unread
+            </a>
+          </li>
+          <li class="nav-item ms-auto">
+            <button class="nav-link bg-success text-white" data-bs-toggle="modal" data-bs-target="#composeModal">
+              <i class="bi bi-pencil-square me-1"></i> Compose
+            </button>
+          </li>
+        </ul>
 
-        <div class="mbox">
-          <input type="radio" name="mbox" id="mInbox" class="mbox-radio" checked />
-          <input type="radio" name="mbox" id="mSent" class="mbox-radio" />
-          <input type="radio" name="mbox" id="mDraft" class="mbox-radio" />
-
-          <div class="mbox-tabs">
-            <label for="mInbox"><i class="bi bi-inbox me-1"></i> Inbox <span class="pill p-danger ms-1 bare">
-                <?php echo $unreadCount; ?>
-              </span></label>
-            <label for="mSent"><i class="bi bi-send me-1"></i> Sent</label>
-            <label for="mDraft"><i class="bi bi-file-earmark me-1"></i> Drafts <span class="pill p-warn ms-1 bare">
-                <?php echo $draftCount; ?>
-              </span></label>
-          </div>
-
-          <div class="mbox-panels">
-            <div class="row g-3">
-
-              <!-- INBOX LIST -->
-              <div class="col-xl-5">
-                <div class="pane pane-inbox">
-                  <?php if (!empty($inboxMessages)): ?>
-                    <?php foreach ($inboxMessages as $msg): ?>
-                      <div class="msg-row <?php echo $msg['is_read'] == 0 ? 'unread' : ''; ?>">
-                        <span class="avatar <?php echo $msg['sender_color'] ?? 'info'; ?>">
-                          <?php echo getInitials($msg['sender_name'] ?? 'U'); ?>
-                        </span>
-                        <div class="msg-body-col">
-                          <h4>
-                            <?php echo htmlspecialchars($msg['sender_name'] ?? 'Unknown'); ?>
-                          </h4>
-                          <p><b>
-                              <?php echo htmlspecialchars($msg['subject'] ?? 'No Subject'); ?>
-                            </b> &mdash;
-                            <?php echo formatPreview($msg['content'] ?? '', 60); ?>
-                          </p>
-                        </div>
-                        <div class="msg-meta">
-                          <?php echo $msg['time_ago'] ?? 'Today'; ?>
-                          <span class="d-block mt-1"><span class="pill <?php echo $msg['read_color']; ?>">
-                              <?php echo $msg['read_status']; ?>
-                            </span></span>
+        <?php if ($conversation_id > 0 && $conversation_participant): ?>
+          <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+              <span>
+                <i class="bi bi-chat-dots me-2 text-primary"></i>
+                Chat with
+                <?php echo htmlspecialchars($conversation_participant['first_name'] . ' ' . $conversation_participant['last_name']); ?>
+                <span class="badge bg-secondary ms-2">
+                  <?php echo $conversation_participant['type']; ?>
+                </span>
+              </span>
+              <a href="?tab=<?php echo $tab; ?>" class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> Back
+              </a>
+            </div>
+            <div class="card-body">
+              <div class="chat-container">
+                <div class="chat-messages" id="chatMessages">
+                  <?php if (count($conversation_messages) > 0): ?>
+                    <?php foreach ($conversation_messages as $msg): ?>
+                      <div class="chat-message <?php echo $msg['is_from_teacher'] ? 'sent' : 'received'; ?>">
+                        <div class="message-bubble">
+                          <?php if (!$msg['is_from_teacher']): ?>
+                            <div class="message-sender">
+                              <?php echo htmlspecialchars($msg['sender_display_name']); ?>
+                            </div>
+                          <?php endif; ?>
+                          <?php echo nl2br(htmlspecialchars($msg['content'])); ?>
+                          <span class="message-time">
+                            <?php echo timeAgo($msg['created_at']); ?>
+                          </span>
                         </div>
                       </div>
                     <?php endforeach; ?>
                   <?php else: ?>
-                    <div style="text-align:center;padding:40px 20px;opacity:0.4;">
-                      <i class="bi bi-inbox" style="font-size:2rem;display:block;margin-bottom:12px;"></i>
-                      <p>No messages in your inbox</p>
+                    <div class="text-center text-muted py-5">
+                      <i class="bi bi-chat fs-1 d-block mb-3"></i>
+                      <p>No messages yet. Start a conversation!</p>
                     </div>
                   <?php endif; ?>
                 </div>
-              </div>
-
-              <!-- READING PANE -->
-              <div class="col-xl-7">
-                <div class="pane pane-inbox">
-                  <div class="card lift h-100">
-                    <?php if ($firstMessage): ?>
-                      <div class="thread-head">
-                        <div class="d-flex align-items-start gap-3">
-                          <span class="avatar avatar-lg <?php echo $firstMessage['sender_color'] ?? 'info'; ?>">
-                            <?php echo getInitials($firstMessage['sender_name'] ?? 'U'); ?>
-                          </span>
-                          <div style="flex:1;min-width:0">
-                            <h3 style="font-size:1.05rem">
-                              <?php echo htmlspecialchars($firstMessage['subject'] ?? 'No Subject'); ?>
-                            </h3>
-                            <p class="mb-0" style="font-size:.78rem;color:#5a6a8a;">
-                              <b style="color:#e8edf5;">
-                                <?php echo htmlspecialchars($firstMessage['sender_name'] ?? 'Unknown'); ?>
-                              </b><br />
-                              To:
-                              <?php echo $studentName; ?> &middot;
-                              <?php echo $firstMessage['formatted_date'] ?? date('M d, Y'); ?>,
-                              <?php echo $firstMessage['formatted_time'] ?? date('h:i A'); ?>
-                            </p>
-                          </div>
-                          <span class="pill <?php echo $firstMessage['sender_color'] ?? 'p-info'; ?>">
-                            <?php echo getSenderTypeLabel($firstMessage['sender_type'] ?? 'Student'); ?>
-                          </span>
-                        </div>
-                      </div>
-                      <div class="thread-body">
-                        <?php
-                        $content = $firstMessage['content'] ?? 'No content available.';
-                        $paragraphs = explode("\n", $content);
-                        foreach ($paragraphs as $p):
-                          if (trim($p) == '')
-                            continue;
-                          ?>
-                          <p>
-                            <?php echo nl2br(htmlspecialchars(trim($p))); ?>
-                          </p>
-                        <?php endforeach; ?>
-                      </div>
-                      <div class="card-body" style="border-top:1px solid rgba(255,255,255,0.04);">
-                        <div class="d-flex flex-wrap gap-2">
-                          <a href="#" class="btn-solid"><i class="bi bi-reply"></i> Reply</a>
-                          <a href="#" class="btn-outline"><i class="bi bi-reply-all"></i> Reply All</a>
-                          <a href="#" class="btn-outline"><i class="bi bi-arrow-right"></i> Forward</a>
-                          <a href="#" class="btn-outline"><i class="bi bi-star"></i> Star</a>
-                          <a href="#" class="btn-outline"><i class="bi bi-archive"></i> Archive</a>
-                        </div>
-                      </div>
-                    <?php else: ?>
-                      <div style="text-align:center;padding:60px 20px;opacity:0.4;">
-                        <i class="bi bi-envelope" style="font-size:2.5rem;display:block;margin-bottom:12px;"></i>
-                        <p>Select a message to read</p>
-                      </div>
-                    <?php endif; ?>
-                  </div>
+                <div class="chat-input mt-3">
+                  <form method="POST" action="" id="chatForm">
+                    <input type="hidden" name="recipient_type" value="<?php echo $conversation_participant['type']; ?>">
+                    <input type="hidden" name="recipient_id" value="<?php echo $conversation_participant['id']; ?>">
+                    <input type="hidden" name="subject" value="Chat Message">
+                    <div class="input-group">
+                      <input type="text" name="content" class="form-control" placeholder="Type your message..." required>
+                      <button type="submit" name="send_message" class="btn btn-primary">
+                        <i class="bi bi-send"></i> Send
+                      </button>
+                    </div>
+                  </form>
                 </div>
               </div>
-
-              <!-- SENT -->
-              <div class="col-12">
-                <div class="pane pane-sent">
-                  <div class="card lift">
-                    <div class="card-head">
-                      <h3>Sent Messages <span class="sub">
-                          <?php echo $sentCount; ?> messages this term
-                        </span></h3>
-                    </div>
-                    <div class="card-body">
-                      <?php if (!empty($sentMessages)): ?>
-                        <?php foreach ($sentMessages as $msg): ?>
-                          <div class="msg-row">
-                            <span class="avatar <?php echo $msg['sender_color'] ?? 'info'; ?>">
-                              <?php echo getInitials($msg['recipient_name'] ?? 'R'); ?>
-                            </span>
-                            <div class="msg-body-col">
-                              <h4>To:
-                                <?php echo htmlspecialchars($msg['recipient_name'] ?? 'Unknown'); ?>
-                              </h4>
-                              <p><b>
-                                  <?php echo htmlspecialchars($msg['subject'] ?? 'No Subject'); ?>
-                                </b> &mdash;
-                                <?php echo formatPreview($msg['content'] ?? '', 60); ?>
-                              </p>
-                            </div>
-                            <div class="msg-meta">
-                              <?php echo $msg['time_ago'] ?? 'Today'; ?>
-                              <span class="d-block mt-1"><span class="pill p-ok">Delivered</span></span>
-                            </div>
-                          </div>
-                        <?php endforeach; ?>
-                      <?php else: ?>
-                        <div style="text-align:center;padding:30px 20px;opacity:0.4;">
-                          <i class="bi bi-send" style="font-size:1.5rem;display:block;margin-bottom:8px;"></i>
-                          <p>No sent messages</p>
-                        </div>
-                      <?php endif; ?>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- DRAFTS -->
-              <div class="col-12">
-                <div class="pane pane-draft">
-                  <div class="card lift">
-                    <div class="card-head">
-                      <h3>Drafts <span class="sub">
-                          <?php echo $draftCount; ?> unsent messages
-                        </span></h3>
-                    </div>
-                    <div class="card-body">
-                      <?php if (!empty($draftMessages)): ?>
-                        <?php foreach ($draftMessages as $msg): ?>
-                          <div class="msg-row">
-                            <span class="avatar <?php echo $msg['sender_color'] ?? 'info'; ?>">
-                              <?php echo getInitials($msg['sender_name'] ?? 'D'); ?>
-                            </span>
-                            <div class="msg-body-col">
-                              <h4>To:
-                                <?php echo htmlspecialchars($msg['sender_name'] ?? 'Unknown'); ?>
-                              </h4>
-                              <p><b>
-                                  <?php echo htmlspecialchars($msg['subject'] ?? 'No Subject'); ?>
-                                </b> &mdash; Draft &mdash;
-                                <?php echo formatPreview($msg['content'] ?? '', 50); ?>
-                              </p>
-                            </div>
-                            <div class="msg-meta">
-                              <?php echo $msg['time_ago'] ?? 'Today'; ?>
-                              <span class="d-block mt-1"><span class="pill p-warn">Draft</span></span>
-                            </div>
-                          </div>
-                        <?php endforeach; ?>
-                      <?php else: ?>
-                        <div style="text-align:center;padding:30px 20px;opacity:0.4;">
-                          <i class="bi bi-file-earmark" style="font-size:1.5rem;display:block;margin-bottom:8px;"></i>
-                          <p>No draft messages</p>
-                        </div>
-                      <?php endif; ?>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
             </div>
           </div>
-        </div>
-      </section>
-
-      <!-- ===== COMPOSE + CONTACTS ===== -->
-      <section class="row g-3 mt-1 rise">
-        <div class="col-xl-7">
-          <div class="card lift h-100">
-            <div class="card-head">
-              <h3>Compose Message <span class="sub">Front-end demo &mdash; nothing is transmitted</span></h3>
+        <?php else: ?>
+          <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+              <span>
+                <i
+                  class="bi bi-<?php echo $tab == 'inbox' ? 'inbox' : ($tab == 'sent' ? 'send' : 'envelope-exclamation'); ?> me-2 text-primary"></i>
+                <?php echo ucfirst($tab); ?>
+              </span>
+              <span class="badge bg-light text-dark">
+                <?php echo count($messages); ?> messages
+              </span>
             </div>
-            <div class="card-body">
-              <form>
-                <div class="row g-3">
-                  <div class="col-md-6">
-                    <label class="form-label" for="to">Recipient</label>
-                    <select class="form-select" id="to">
-                      <option selected>Ms. Sara Khan — Physics</option>
-                      <option>Mr. Ahmed Raza — Mathematics</option>
-                      <option>Mr. Bilal Ahmad — Chemistry</option>
-                      <option>Mr. Ali Hassan — Computer Science</option>
-                      <option>Ms. Hina Malik — English</option>
-                      <option>Mr. Tariq Mehmood — Urdu</option>
-                      <option>Ms. Farah Noor — Class Teacher</option>
-                      <option>Admin Office</option>
-                      <option>Accounts Office</option>
-                    </select>
-                  </div>
-                  <div class="col-md-6">
-                    <label class="form-label" for="subject">Subject</label>
-                    <input type="text" class="form-control" id="subject" value="Query regarding Mid-Term syllabus" />
-                  </div>
-                  <div class="col-12">
-                    <label class="form-label" for="body">Message</label>
-                    <textarea class="form-control" id="body" rows="6">Respected Ma'am,
-
-Could you please confirm which chapters from the revised syllabus will be included in the Mid-Term Physics paper? I would also like to know whether numericals from Chapter 13 are part of the assessment.
-
-Thank you.
-Ahmed Faraz — Class 10-A, STU-1024</textarea>
-                  </div>
-                  <div class="col-12 d-flex flex-wrap gap-2">
-                    <a href="#" class="btn-solid"><i class="bi bi-send"></i> Send Message</a>
-                    <a href="#" class="btn-outline"><i class="bi bi-paperclip"></i> Attach File</a>
-                    <a href="#" class="btn-outline"><i class="bi bi-save"></i> Save Draft</a>
-                  </div>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-
-        <div class="col-xl-5">
-          <div class="card lift h-100">
-            <div class="card-head">
-              <h3>Frequent Contacts <span class="sub">Teachers &amp; departments</span></h3>
-            </div>
-            <div class="card-body">
-              <?php if (!empty($contacts)): ?>
-                <?php foreach ($contacts as $contact): ?>
-                  <div class="msg-row">
-                    <span class="avatar <?php echo $contact['avatar_color'] ?? 'info'; ?>">
-                      <?php echo getInitials($contact['full_name'] ?? 'C'); ?>
-                    </span>
-                    <div class="msg-body-col">
-                      <h4>
-                        <?php echo htmlspecialchars($contact['full_name'] ?? 'Unknown'); ?>
-                      </h4>
-                      <p>
-                        <?php echo htmlspecialchars($contact['type'] ?? 'Staff'); ?>
-                        <?php echo !empty($contact['email']) ? '· ' . htmlspecialchars($contact['email']) : ''; ?>
-                      </p>
+            <div class="list-group list-group-flush">
+              <?php if (count($messages) > 0): ?>
+                <?php foreach ($messages as $msg):
+                  $is_from_teacher = ($msg['sender_type'] == 'Teacher' && $msg['sender_id'] == $teacher_db_id);
+                  $is_unread = (!$is_from_teacher && $msg['is_read'] == 0);
+                  $sender_display = $tab == 'sent' ? 'To: ' . $msg['recipient_name'] : $msg['sender_name'];
+                  ?>
+                  <a href="?tab=<?php echo $tab; ?>&conversation=<?php echo $is_from_teacher ? $msg['recipient_id'] : $msg['sender_id']; ?>"
+                    class="list-group-item list-group-item-action msg-item <?php echo $is_unread ? 'unread' : ''; ?>">
+                    <div class="d-flex justify-content-between align-items-center">
+                      <div class="d-flex align-items-center gap-3 flex-grow-1">
+                        <div class="msg-sender">
+                          <i class="bi bi-person-circle me-1"></i>
+                          <?php echo htmlspecialchars($sender_display); ?>
+                        </div>
+                        <div class="msg-subject flex-grow-1">
+                          <?php echo htmlspecialchars($msg['subject'] ?? 'No Subject'); ?>
+                        </div>
+                        <div class="msg-preview d-none d-md-block text-muted small">
+                          <?php echo htmlspecialchars(substr($msg['content'], 0, 60)) . (strlen($msg['content']) > 60 ? '...' : ''); ?>
+                        </div>
+                      </div>
+                      <div class="d-flex align-items-center gap-2">
+                        <span class="msg-time small text-muted">
+                          <?php echo timeAgo($msg['created_at']); ?>
+                        </span>
+                        <?php if ($tab == 'inbox'): ?>
+                          <?php if ($is_unread): ?>
+                            <span class="badge bg-danger">Unread</span>
+                          <?php else: ?>
+                            <span class="badge bg-success">Read</span>
+                          <?php endif; ?>
+                        <?php else: ?>
+                          <span class="badge bg-primary">Sent</span>
+                        <?php endif; ?>
+                      </div>
                     </div>
-                    <div class="msg-meta"><span class="pill p-teal">Online</span></div>
-                  </div>
+                  </a>
                 <?php endforeach; ?>
               <?php else: ?>
-                <div style="text-align:center;padding:20px;opacity:0.4;">
-                  <i class="bi bi-people" style="font-size:1.5rem;display:block;margin-bottom:8px;"></i>
-                  <p>No contacts available</p>
+                <div class="text-center py-5">
+                  <i class="bi bi-inbox fs-1 d-block text-muted mb-3"></i>
+                  <h5>No messages in
+                    <?php echo $tab; ?>
+                  </h5>
+                  <p class="text-muted">Your
+                    <?php echo $tab; ?> folder is empty.
+                  </p>
+                  <?php if ($tab == 'inbox'): ?>
+                    <button class="btn btn-primary mt-2" data-bs-toggle="modal" data-bs-target="#composeModal">
+                      <i class="bi bi-pencil-square me-1"></i> Compose Message
+                    </button>
+                  <?php endif; ?>
                 </div>
               <?php endif; ?>
-              <div class="divider-soft"></div>
-              <div class="alert-soft teal">
-                <i class="bi bi-shield-lock"></i>
-                <span>All messages are logged for safeguarding purposes. Responses from staff usually arrive within one
-                  working day.</span>
+            </div>
+          </div>
+        <?php endif; ?>
+      </main>
+
+      <footer class="td-footer">© 2026 Bright Future School — Teacher Panel.</footer>
+    </div>
+  </div>
+
+  <!-- Compose Message Modal -->
+  <div class="modal fade" id="composeModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-pencil-square me-2 text-primary"></i>Compose Message</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <form method="POST" action="">
+          <div class="modal-body">
+            <div class="row g-3">
+              <div class="col-12">
+                <label class="form-label">Recipient Type <span class="text-danger">*</span></label>
+                <select name="recipient_type" class="form-select" id="recipientType" required>
+                  <option value="">Select Recipient Type</option>
+                  <option value="Student">Student</option>
+                  <option value="Parent">Parent</option>
+                  <option value="Admin">Admin</option>
+                </select>
+              </div>
+              <div class="col-12">
+                <label class="form-label">Recipient <span class="text-danger">*</span></label>
+                <select name="recipient_id" class="form-select" id="recipientId" required>
+                  <option value="">Select Recipient</option>
+                  <?php foreach ($contacts as $contact): ?>
+                    <option value="<?php echo $contact['id']; ?>" data-type="<?php echo $contact['type']; ?>">
+                      <?php echo htmlspecialchars($contact['type'] . ': ' . $contact['first_name'] . ' ' . ($contact['last_name'] ?? '')); ?>
+                      <?php if ($contact['class_name']): ?>
+                        (
+                        <?php echo htmlspecialchars($contact['class_name']); ?>)
+                      <?php endif; ?>
+                    </option>
+                  <?php endforeach; ?>
+                </select>
+              </div>
+              <div class="col-12">
+                <label class="form-label">Subject</label>
+                <input type="text" name="subject" class="form-control" placeholder="Enter subject (optional)">
+              </div>
+              <div class="col-12">
+                <label class="form-label">Message <span class="text-danger">*</span></label>
+                <textarea name="content" class="form-control" rows="5" placeholder="Type your message here..."
+                  required></textarea>
               </div>
             </div>
           </div>
-        </div>
-      </section>
-
-    </main>
-
-    <!-- ===== FOOTER ===== -->
-    <footer class="page-foot">
-      <span>&copy; 2026 Crescent Public School &middot; Student Portal</span>
-      <span class="d-flex gap-3">
-        <a href="notices.php">Help Centre</a>
-        <a href="messages.php">Contact Office</a>
-        <a href="settings.php">Privacy</a>
-      </span>
-    </footer>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" name="send_message" class="btn btn-primary">
+              <i class="bi bi-send"></i> Send Message
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   </div>
 
+  <script>
+    // Filter recipients based on type selection
+    document.getElementById('recipientType')?.addEventListener('change', function () {
+      const type = this.value;
+      const recipientSelect = document.getElementById('recipientId');
+      const options = recipientSelect.querySelectorAll('option');
+
+      options.forEach(option => {
+        if (option.value === '') {
+          option.style.display = '';
+          return;
+        }
+        const optionType = option.getAttribute('data-type');
+        if (type === '' || optionType === type) {
+          option.style.display = '';
+        } else {
+          option.style.display = 'none';
+        }
+      });
+
+      recipientSelect.value = '';
+    });
+
+    // Scroll chat to bottom
+    function scrollChatToBottom() {
+      const chatMessages = document.getElementById('chatMessages');
+      if (chatMessages) {
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+      scrollChatToBottom();
+    });
+
+    // Auto-refresh chat every 30 seconds
+    let chatRefreshInterval = null;
+
+    function startChatRefresh() {
+      if (chatRefreshInterval) {
+        clearInterval(chatRefreshInterval);
+      }
+
+      if (document.querySelector('.chat-container')) {
+        chatRefreshInterval = setInterval(function () {
+          const url = new URL(window.location.href);
+          const conversationId = url.searchParams.get('conversation');
+          if (conversationId) {
+            location.reload();
+          }
+        }, 30000);
+      }
+    }
+
+    if (document.querySelector('.chat-container')) {
+      startChatRefresh();
+    }
+  </script>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 
 </html>

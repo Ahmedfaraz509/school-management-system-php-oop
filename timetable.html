@@ -1,262 +1,131 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<meta name="description" content="My Timetable — Crescent Public School Student Portal" />
-<title>My Timetable &middot; Student Portal &middot; Crescent Public School</title>
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
-<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
-<link rel="stylesheet" href="css/style.css" />
-<link rel="icon" href="assets/images/logo.svg" type="image/svg+xml" />
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>My Timetable | Teacher Dashboard</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-
-<input type="checkbox" id="navToggle" class="nav-toggle" />
-<label for="navToggle" class="nav-backdrop" aria-hidden="true"></label>
-
-<aside class="app-sidebar">
-  <div class="sidebar-head">
-    <a href="index.html" class="sidebar-brand">
-      <img src="assets/images/logo.svg" alt="Crescent Public School logo" />
-      <span class="brand-text"><strong>Crescent Public School</strong><small>Student Portal</small></span>
-    </a>
-    <label for="navToggle" class="sidebar-close" aria-label="Close navigation"><i class="bi bi-x-lg"></i></label>
-  </div>
-  <div class="student-card">
-    <span class="avatar avatar-lg">AF</span>
-    <div class="student-card-text"><strong>Ahmed Faraz</strong><small>Class 10-A &middot; STU-1024</small></div>
-    <span class="verify" title="Verified student"><i class="bi bi-patch-check-fill"></i></span>
-  </div>
-  <nav class="sidebar-nav">
-    <p class="nav-group">Overview</p>
-    <a class="nav-item" href="index.html"><i class="bi bi-columns-gap"></i><span>Dashboard</span></a>
-    <p class="nav-group">Academics</p>
-    <a class="nav-item" href="subjects.html"><i class="bi bi-journal-bookmark"></i><span>My Subjects</span><em class="nav-tag">6</em></a>
-    <a class="nav-item active" href="timetable.html"><i class="bi bi-calendar-week"></i><span>My Timetable</span></a>
-    <a class="nav-item" href="attendance.html"><i class="bi bi-check2-square"></i><span>My Attendance</span></a>
-    <a class="nav-item" href="assignments.html"><i class="bi bi-journal-text"></i><span>Assignments</span><em class="nav-tag nav-tag-warn">4</em></a>
-    <a class="nav-item" href="exams.html"><i class="bi bi-pencil-square"></i><span>Exams</span><em class="nav-tag nav-tag-info">3</em></a>
-    <a class="nav-item" href="results.html"><i class="bi bi-graph-up-arrow"></i><span>Results</span></a>
-    <p class="nav-group">Finance</p>
-    <a class="nav-item" href="fees.html"><i class="bi bi-wallet2"></i><span>Fees</span><em class="nav-tag nav-tag-danger">1</em></a>
-    <p class="nav-group">School Life</p>
-    <a class="nav-item" href="notices.html"><i class="bi bi-megaphone"></i><span>Notices</span></a>
-    <a class="nav-item" href="events.html"><i class="bi bi-calendar2-heart"></i><span>Events</span></a>
-    <a class="nav-item" href="messages.html"><i class="bi bi-envelope"></i><span>Messages</span><em class="nav-tag">3</em></a>
-    <p class="nav-group">Account</p>
-    <a class="nav-item" href="profile.html"><i class="bi bi-person-badge"></i><span>My Profile</span></a>
-    <a class="nav-item" href="settings.html"><i class="bi bi-gear"></i><span>Settings</span></a>
-  </nav>
-  <div class="sidebar-foot">
-    <a href="#" class="logout-btn"><i class="bi bi-box-arrow-right"></i><span>Logout</span></a>
-    <p class="copy">Portal v2.6 &middot; Session 2026&ndash;27</p>
-  </div>
-</aside>
-
-<div class="app-main">
-  <header class="app-topbar">
-    <label for="navToggle" class="nav-btn" aria-label="Open navigation"><i class="bi bi-list"></i></label>
-    <div class="topbar-title">
-      <h1>My Timetable</h1>
-      <div class="crumbs"><a href="index.html">Home</a><span>/</span>Academics<span>/</span>My Timetable</div>
-    </div>
-    <div class="topbar-search"><i class="bi bi-search"></i><input type="search" placeholder="Search periods or rooms&hellip;" aria-label="Search" /></div>
-    <div class="topbar-actions">
-      <div class="icon-drop">
-        <a href="notices.html" class="icon-btn" aria-label="Notifications"><i class="bi bi-bell"></i><span class="ping">5</span></a>
-        <div class="drop-panel">
-          <div class="drop-head"><strong>Notifications</strong><a href="notices.html">View all</a></div>
-          <a href="exams.html" class="drop-row"><i class="dot-ico p-info"><i class="bi bi-pencil-square"></i></i><span><p>Mid-Term timetable published</p><small>Examination Cell &middot; 2 hours ago</small></span></a>
-          <a href="assignments.html" class="drop-row"><i class="dot-ico p-warn"><i class="bi bi-journal-text"></i></i><span><p>Algebra Worksheet due in 5 days</p><small>Mr. Ahmed &middot; yesterday</small></span></a>
+<input type="checkbox" id="tdSidebarToggle">
+<div class="td-wrapper">
+  <label for="tdSidebarToggle" class="td-overlay"></label>
+  <aside class="td-sidebar">
+    <div class="td-brand"><i class="bi bi-mortarboard-fill"></i><span>Bright Future<small>School Portal</small></span></div>
+    <div class="td-teacher-box"><div class="td-avatar">MA</div><div><h6>Mr. Ahmed</h6><p>Mathematics Teacher</p></div></div>
+    <nav class="td-nav">
+      <div class="td-nav-title">Main</div>
+      <a href="index.html"><i class="bi bi-speedometer2"></i> Dashboard</a>
+      <a href="students.html"><i class="bi bi-people"></i> My Students</a>
+      <a href="attendance.html"><i class="bi bi-calendar2-check"></i> Attendance</a>
+      <a href="subjects.html"><i class="bi bi-journal-bookmark"></i> My Subjects</a>
+      <a href="timetable.html" class="active"><i class="bi bi-clock-history"></i> My Timetable</a>
+      <div class="td-nav-title">Academics</div>
+      <a href="assignments.html"><i class="bi bi-file-earmark-text"></i> Assignments</a>
+      <a href="exams.html"><i class="bi bi-pencil-square"></i> Exams</a>
+      <a href="results.html"><i class="bi bi-bar-chart-line"></i> Results</a>
+      <div class="td-nav-title">Communication</div>
+      <a href="notices.html"><i class="bi bi-megaphone"></i> Notices</a>
+      <a href="messages.html"><i class="bi bi-chat-dots"></i> Messages</a>
+      <div class="td-nav-title">Account</div>
+      <a href="profile.html"><i class="bi bi-person-badge"></i> My Profile</a>
+      <a href="settings.html"><i class="bi bi-gear"></i> Settings</a>
+      <a href="#" class="logout"><i class="bi bi-box-arrow-right"></i> Logout</a>
+    </nav>
+  </aside>
+  <div class="td-main">
+    <header class="td-navbar">
+      <label for="tdSidebarToggle" class="td-burger"><i class="bi bi-list"></i></label>
+      <h1 class="td-page-title">My Timetable <small>Weekly teaching schedule</small></h1>
+      <div class="td-search ms-auto"><div class="input-group">
+        <span class="input-group-text bg-white border-end-0"><i class="bi bi-search"></i></span>
+        <input type="search" class="form-control border-start-0" placeholder="Search...">
+      </div></div>
+      <a href="notices.html" class="td-icon-btn"><i class="bi bi-bell"></i><span class="td-dot"></span></a>
+      <a href="profile.html" class="d-flex align-items-center gap-2 text-dark"><span class="td-avatar">MA</span>
+        <span class="d-none d-md-block"><strong class="d-block" style="font-size:.85rem">Mr. Ahmed</strong><small class="text-muted" style="font-size:.72rem">Mathematics Teacher</small></span></a>
+    </header>
+    <main class="td-content">
+      <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <span><i class="bi bi-calendar-week me-2 text-primary"></i>Weekly Timetable</span>
+          <span class="badge bg-primary-subtle text-primary">Academic Year 2025 - 2026</span>
         </div>
-      </div>
-      <div class="icon-drop">
-        <a href="messages.html" class="icon-btn" aria-label="Messages"><i class="bi bi-envelope"></i><span class="ping">3</span></a>
-        <div class="drop-panel">
-          <div class="drop-head"><strong>Messages</strong><a href="messages.html">Open inbox</a></div>
-          <a href="messages.html" class="drop-row"><span class="avatar info">SR</span><span><p>Ms. Sara Khan &middot; Lab report feedback</p><small>Today, 09:14 AM</small></span></a>
-        </div>
-      </div>
-      <div class="icon-drop">
-        <a href="profile.html" class="profile-chip"><span class="avatar">AF</span><span class="who"><b>Ahmed Faraz</b><small>Class 10-A</small></span><i class="bi bi-chevron-down"></i></a>
-        <div class="drop-panel">
-          <div class="drop-head"><strong>Ahmed Faraz</strong><span class="pill p-ok">Active</span></div>
-          <a href="profile.html" class="drop-row"><i class="dot-ico p-teal"><i class="bi bi-person-badge"></i></i><span><p>My Profile</p><small>STU-1024</small></span></a>
-          <a href="settings.html" class="drop-row"><i class="dot-ico p-violet"><i class="bi bi-gear"></i></i><span><p>Settings</p><small>Preferences &amp; alerts</small></span></a>
-          <a href="#" class="drop-row"><i class="dot-ico p-danger"><i class="bi bi-box-arrow-right"></i></i><span><p>Logout</p><small>End this session</small></span></a>
-        </div>
-      </div>
-    </div>
-  </header>
-
-  <main class="app-content">
-
-    <section class="welcome rise">
-      <div class="row g-4 align-items-center">
-        <div class="col-lg-8">
-          <span class="eyebrow">Week 09 &middot; 24 &ndash; 29 August 2026</span>
-          <h2>Weekly class timetable</h2>
-          <p>School hours run from 08:00 AM to 02:15 PM, Monday to Saturday. The scrollable grid below shows every period with its subject, teacher and room allocation.</p>
-          <div class="quick-chips">
-            <a href="subjects.html" class="chip"><i class="bi bi-journal-bookmark"></i> My Subjects</a>
-            <a href="attendance.html" class="chip"><i class="bi bi-check2-square"></i> Attendance</a>
-            <a href="assignments.html" class="chip"><i class="bi bi-journal-text"></i> Assignments</a>
-          </div>
-        </div>
-        <div class="col-lg-4">
-          <div class="row g-2">
-            <div class="col-6"><div class="fact"><small>Periods / Week</small><strong>34</strong><span>6 days</span></div></div>
-            <div class="col-6"><div class="fact"><small>Today&rsquo;s Periods</small><strong>06</strong><span>3 remaining</span></div></div>
-            <div class="col-6"><div class="fact"><small>Assembly</small><strong>07:45 AM</strong><span>Main ground</span></div></div>
-            <div class="col-6"><div class="fact"><small>Dismissal</small><strong>02:15 PM</strong><span>Gate 2</span></div></div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section class="mt-4 rise">
-      <div class="card lift">
-        <div class="card-head">
-          <h3>Class 10-A &middot; Weekly Timetable <span class="sub">Drag horizontally on small screens</span></h3>
-          <span class="d-flex gap-2 flex-wrap">
-            <span class="pill s-math bare" style="background:#e7f0f8;color:#24598c">Mathematics</span>
-            <span class="pill bare" style="background:#efeaf8;color:#54398a">Physics</span>
-            <span class="pill bare" style="background:#e2f4ec;color:#14684a">Chemistry</span>
-            <span class="pill bare" style="background:#e2f0f2;color:#0a4a52">Computer Sc.</span>
-            <span class="pill bare" style="background:#fdf2df;color:#8f5b0c">English</span>
-            <span class="pill bare" style="background:#fbeae7;color:#9b3729">Urdu</span>
-          </span>
-        </div>
-        <div class="table-wrap">
-          <table class="tt-table">
-            <thead>
-              <tr>
-                <th style="width:120px">Time</th>
-                <th>Monday</th><th>Tuesday</th><th>Wednesday</th><th>Thursday</th><th>Friday</th><th>Saturday</th>
-              </tr>
-            </thead>
+        <div class="table-responsive">
+          <table class="table table-bordered table-hover align-middle text-center mb-0">
+            <thead><tr><th>Time</th><th>Monday</th><th>Tuesday</th><th>Wednesday</th><th>Thursday</th><th>Friday</th><th>Saturday</th></tr></thead>
             <tbody>
               <tr>
-                <th>08:00 &ndash; 09:00</th>
-                <td><span class="tt-cell s-math"><b>Mathematics</b><small>Mr. Ahmed &middot; Rm 201</small></span></td>
-                <td><span class="tt-cell s-eng"><b>English</b><small>Ms. Hina &middot; Rm 118</small></span></td>
-                <td><span class="tt-cell s-phy"><b>Physics</b><small>Ms. Sara &middot; Rm 105</small></span></td>
-                <td><span class="tt-cell s-chem"><b>Chemistry</b><small>Mr. Bilal &middot; Rm 110</small></span></td>
-                <td><span class="tt-cell s-math"><b>Mathematics</b><small>Mr. Ahmed &middot; Rm 201</small></span></td>
-                <td><span class="tt-cell s-cs"><b>Computer Science</b><small>Mr. Ali &middot; Lab 2</small></span></td>
+                <td class="fw-semibold text-nowrap">08:00 - 09:00</td>
+                <td>Maths<br><small class="text-muted">10-A · R201</small></td>
+                <td>Maths<br><small class="text-muted">9-B · R105</small></td>
+                <td>Physics<br><small class="text-muted">10-B · Lab 3</small></td>
+                <td>Maths<br><small class="text-muted">10-A · R201</small></td>
+                <td>Comp Sci<br><small class="text-muted">9-A · Lab 1</small></td>
+                <td>Maths<br><small class="text-muted">8-A · R102</small></td>
               </tr>
               <tr>
-                <th>09:00 &ndash; 10:00</th>
-                <td><span class="tt-cell s-phy"><b>Physics</b><small>Ms. Sara &middot; Rm 105</small></span></td>
-                <td><span class="tt-cell s-math"><b>Mathematics</b><small>Mr. Ahmed &middot; Rm 201</small></span></td>
-                <td><span class="tt-cell s-urdu"><b>Urdu</b><small>Mr. Tariq &middot; Rm 204</small></span></td>
-                <td><span class="tt-cell s-phy"><b>Physics</b><small>Ms. Sara &middot; Rm 105</small></span></td>
-                <td><span class="tt-cell s-chem"><b>Chemistry</b><small>Mr. Bilal &middot; Rm 110</small></span></td>
-                <td><span class="tt-cell s-cs"><b>Computer Science</b><small>Mr. Ali &middot; Lab 2</small></span></td>
+                <td class="fw-semibold text-nowrap">09:00 - 10:00</td>
+                <td>Maths<br><small class="text-muted">9-B · R105</small></td>
+                <td>Maths<br><small class="text-muted">8-A · R102</small></td>
+                <td>Maths<br><small class="text-muted">10-A · R201</small></td>
+                <td>Physics<br><small class="text-muted">10-B · Lab 3</small></td>
+                <td>Maths<br><small class="text-muted">9-B · R105</small></td>
+                <td><span class="text-muted">Free</span></td>
+              </tr>
+              <tr class="table-light">
+                <td class="fw-semibold text-nowrap">10:00 - 10:30</td>
+                <td colspan="6"><span class="badge bg-secondary">Break</span></td>
               </tr>
               <tr>
-                <th>10:00 &ndash; 10:30</th>
-                <td colspan="6"><span class="tt-cell break-cell"><b>Morning Break</b><small>School courtyard</small></span></td>
+                <td class="fw-semibold text-nowrap">10:30 - 11:30</td>
+                <td>Maths<br><small class="text-muted">8-A · R102</small></td>
+                <td>Comp Sci<br><small class="text-muted">9-A · Lab 1</small></td>
+                <td>Maths<br><small class="text-muted">8-A · R102</small></td>
+                <td>Maths<br><small class="text-muted">9-B · R105</small></td>
+                <td>Physics<br><small class="text-muted">10-B · Lab 3</small></td>
+                <td>Comp Sci<br><small class="text-muted">9-A · Lab 1</small></td>
               </tr>
               <tr>
-                <th>10:30 &ndash; 11:30</th>
-                <td><span class="tt-cell s-cs"><b>Computer Science</b><small>Mr. Ali &middot; Lab 2</small></span></td>
-                <td><span class="tt-cell s-chem"><b>Chemistry</b><small>Mr. Bilal &middot; Rm 110</small></span></td>
-                <td><span class="tt-cell s-math"><b>Mathematics</b><small>Mr. Ahmed &middot; Rm 201</small></span></td>
-                <td><span class="tt-cell s-eng"><b>English</b><small>Ms. Hina &middot; Rm 118</small></span></td>
-                <td><span class="tt-cell s-cs"><b>Computer Science</b><small>Mr. Ali &middot; Lab 2</small></span></td>
-                <td><span class="tt-cell s-urdu"><b>Urdu</b><small>Mr. Tariq &middot; Rm 204</small></span></td>
+                <td class="fw-semibold text-nowrap">11:30 - 12:30</td>
+                <td><span class="text-muted">Free</span></td>
+                <td>Maths<br><small class="text-muted">10-A · R201</small></td>
+                <td><span class="text-muted">Free</span></td>
+                <td>Comp Sci<br><small class="text-muted">9-A · Lab 1</small></td>
+                <td>Maths<br><small class="text-muted">10-A · R201</small></td>
+                <td>Maths<br><small class="text-muted">9-B · R105</small></td>
+              </tr>
+              <tr class="table-light">
+                <td class="fw-semibold text-nowrap">12:30 - 01:00</td>
+                <td colspan="6"><span class="badge bg-secondary">Lunch Break</span></td>
               </tr>
               <tr>
-                <th>11:30 &ndash; 12:30</th>
-                <td><span class="tt-cell s-eng"><b>English</b><small>Ms. Hina &middot; Rm 118</small></span></td>
-                <td><span class="tt-cell s-urdu"><b>Urdu</b><small>Mr. Tariq &middot; Rm 204</small></span></td>
-                <td><span class="tt-cell s-chem"><b>Chemistry</b><small>Mr. Bilal &middot; Rm 110</small></span></td>
-                <td><span class="tt-cell s-math"><b>Mathematics</b><small>Mr. Ahmed &middot; Rm 201</small></span></td>
-                <td><span class="tt-cell s-phy"><b>Physics Lab</b><small>Ms. Sara &middot; Lab 1</small></span></td>
-                <td><span class="tt-cell s-eng"><b>English</b><small>Ms. Hina &middot; Rm 118</small></span></td>
+                <td class="fw-semibold text-nowrap">01:00 - 02:00</td>
+                <td>Physics<br><small class="text-muted">10-B · Lab 3</small></td>
+                <td><span class="text-muted">Free</span></td>
+                <td>Comp Sci<br><small class="text-muted">9-A · Lab 1</small></td>
+                <td>Maths<br><small class="text-muted">8-A · R102</small></td>
+                <td><span class="text-muted">Free</span></td>
+                <td><span class="text-muted">Free</span></td>
               </tr>
               <tr>
-                <th>12:30 &ndash; 01:15</th>
-                <td colspan="6"><span class="tt-cell break-cell"><b>Lunch &amp; Prayer Break</b><small>Cafeteria &amp; mosque</small></span></td>
-              </tr>
-              <tr>
-                <th>01:15 &ndash; 02:15</th>
-                <td><span class="tt-cell s-urdu"><b>Urdu</b><small>Mr. Tariq &middot; Rm 204</small></span></td>
-                <td><span class="tt-cell s-phy"><b>Physics</b><small>Ms. Sara &middot; Rm 105</small></span></td>
-                <td><span class="tt-cell s-eng"><b>English</b><small>Ms. Hina &middot; Rm 118</small></span></td>
-                <td><span class="tt-cell s-urdu"><b>Urdu</b><small>Mr. Tariq &middot; Rm 204</small></span></td>
-                <td><span class="tt-cell s-math"><b>Mathematics</b><small>Mr. Ahmed &middot; Rm 201</small></span></td>
-                <td><span class="tt-cell s-chem"><b>Chemistry Lab</b><small>Mr. Bilal &middot; Lab 1</small></span></td>
+                <td class="fw-semibold text-nowrap">02:00 - 03:00</td>
+                <td>Maths<br><small class="text-muted">10-A · R201</small></td>
+                <td>Physics<br><small class="text-muted">10-B · Lab 3</small></td>
+                <td>Maths<br><small class="text-muted">9-B · R105</small></td>
+                <td><span class="text-muted">Free</span></td>
+                <td>Maths<br><small class="text-muted">8-A · R102</small></td>
+                <td><span class="text-muted">Free</span></td>
               </tr>
             </tbody>
           </table>
         </div>
       </div>
-    </section>
-
-    <section class="row g-3 mt-1 rise">
-      <div class="col-lg-4">
-        <div class="card lift h-100">
-          <div class="card-head"><h3>Today &middot; Monday <span class="sub">24 August 2026</span></h3></div>
-          <div class="card-body tight">
-            <div class="notice-row s-math"><div class="notice-date"><b>08</b><small>AM</small></div><div><h4>Mathematics</h4><p>Mr. Ahmed &middot; Room 201</p><span class="pill p-grey">Completed</span></div></div>
-            <div class="notice-row s-phy"><div class="notice-date"><b>09</b><small>AM</small></div><div><h4>Physics</h4><p>Ms. Sara &middot; Room 105</p><span class="pill p-info">Ongoing</span></div></div>
-            <div class="notice-row s-cs"><div class="notice-date"><b>10</b><small>AM</small></div><div><h4>Computer Science</h4><p>Mr. Ali &middot; Lab 2</p><span class="pill p-teal">Upcoming</span></div></div>
-            <div class="notice-row s-eng"><div class="notice-date"><b>11</b><small>AM</small></div><div><h4>English</h4><p>Ms. Hina &middot; Room 118</p><span class="pill p-teal">Upcoming</span></div></div>
-            <div class="notice-row s-urdu"><div class="notice-date"><b>01</b><small>PM</small></div><div><h4>Urdu</h4><p>Mr. Tariq &middot; Room 204</p><span class="pill p-teal">Upcoming</span></div></div>
-          </div>
-        </div>
-      </div>
-
-      <div class="col-lg-4">
-        <div class="card lift h-100">
-          <div class="card-head"><h3>Period Distribution <span class="sub">Weekly load per subject</span></h3></div>
-          <div class="card-body">
-            <div class="bar-label"><span><b>Mathematics</b> &middot; 6 periods</span><b>6</b></div>
-            <span class="bar mb-3"><i style="width:100%;background:#2b6da9"></i></span>
-            <div class="bar-label"><span><b>English</b> &middot; 6 periods</span><b>6</b></div>
-            <span class="bar mb-3"><i style="width:100%;background:#dd8f21"></i></span>
-            <div class="bar-label"><span><b>Urdu</b> &middot; 6 periods</span><b>6</b></div>
-            <span class="bar mb-3"><i style="width:100%;background:#bf4638"></i></span>
-            <div class="bar-label"><span><b>Physics</b> &middot; 6 periods</span><b>6</b></div>
-            <span class="bar mb-3"><i style="width:100%;background:#6a4c9e"></i></span>
-            <div class="bar-label"><span><b>Chemistry</b> &middot; 5 periods</span><b>5</b></div>
-            <span class="bar mb-3"><i style="width:83%;background:#1a8a62"></i></span>
-            <div class="bar-label"><span><b>Computer Science</b> &middot; 5 periods</span><b>5</b></div>
-            <span class="bar"><i style="width:83%;background:#0d5c66"></i></span>
-          </div>
-        </div>
-      </div>
-
-      <div class="col-lg-4">
-        <div class="card lift h-100">
-          <div class="card-head"><h3>School Routine <span class="sub">Standard timings</span></h3></div>
-          <div class="card-body">
-            <ul class="meta-list">
-              <li><i class="bi bi-flag"></i> Assembly <span>07:45 AM</span></li>
-              <li><i class="bi bi-door-open"></i> School opens <span>07:30 AM</span></li>
-              <li><i class="bi bi-bell"></i> Period 1 begins <span>08:00 AM</span></li>
-              <li><i class="bi bi-cup-hot"></i> Morning break <span>10:00 AM</span></li>
-              <li><i class="bi bi-basket"></i> Lunch &amp; prayer <span>12:30 PM</span></li>
-              <li><i class="bi bi-house-door"></i> Dismissal <span>02:15 PM</span></li>
-              <li><i class="bi bi-calendar-x"></i> Weekend <span>Sunday</span></li>
-            </ul>
-            <div class="divider-soft"></div>
-            <div class="alert-soft teal"><i class="bi bi-info-circle"></i><span>Friday assembly is held after the prayer break. Saturday has no assembly &mdash; classes start directly at 08:00 AM.</span></div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-  </main>
-
-  <footer class="page-foot">
-    <span>&copy; 2026 Crescent Public School &middot; Student Portal</span>
-    <span class="d-flex gap-3"><a href="notices.html">Help Centre</a><a href="messages.html">Contact Office</a><a href="settings.html">Privacy</a></span>
-  </footer>
+    </main>
+    <footer class="td-footer">© 2026 Bright Future School — Teacher Panel.</footer>
+  </div>
 </div>
-
 </body>
 </html>

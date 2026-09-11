@@ -1,789 +1,1193 @@
+<?php
+// index.php - Teacher Dashboard
+require_once '../database/connect.php';
+
+session_start();
+
+// First, let's get the actual teacher ID from the teachers table
+// Try to get the first teacher if no session exists
+$teacher_stmt = $conn->prepare("
+    SELECT id, full_name, user_id, teacher_id
+    FROM teachers 
+    LIMIT 1
+");
+$teacher_stmt->execute();
+$teacher_data = $teacher_stmt->fetch();
+
+if ($teacher_data) {
+  $teacher_db_id = $teacher_data['id'];
+  $teacher_name = $teacher_data['full_name'] ?? 'Teacher';
+  $teacher_user_id = $teacher_data['user_id'] ?? 0;
+} else {
+  // If no teachers exist, use default
+  $teacher_db_id = 10;
+  $teacher_name = 'Mr. Ahmed';
+  $teacher_user_id = 0;
+}
+
+// If session has a teacher ID, use it instead
+if (isset($_SESSION['teacher_id']) && $_SESSION['teacher_id'] > 0) {
+  $teacher_db_id = $_SESSION['teacher_id'];
+  // Get teacher name from session or database
+  $teacher_stmt = $conn->prepare("SELECT full_name FROM teachers WHERE id = :id");
+  $teacher_stmt->bindValue(':id', $teacher_db_id);
+  $teacher_stmt->execute();
+  $teacher = $teacher_stmt->fetch();
+  if ($teacher) {
+    $teacher_name = $teacher['full_name'];
+  }
+}
+
+$teacher_initials = implode('', array_map(function ($word) {
+  return strtoupper(substr($word, 0, 1));
+}, explode(' ', $teacher_name)));
+
+// Debug: Log the teacher ID being used
+// echo "<!-- Teacher ID: " . $teacher_db_id . " -->";
+
+// Get statistics
+$stats = [];
+
+// Total Students - Get all students in classes taught by this teacher
+$student_stmt = $conn->prepare("
+    SELECT COUNT(DISTINCT s.id) as total
+    FROM students s
+    LEFT JOIN classes c ON s.class_id = c.id
+    WHERE c.teacher_id = :teacher_id AND s.status = 'Active'
+");
+$student_stmt->bindValue(':teacher_id', $teacher_db_id);
+$student_stmt->execute();
+$result = $student_stmt->fetch();
+$stats['students'] = $result['total'] ?? 0;
+
+// Total Classes
+$class_stmt = $conn->prepare("
+    SELECT COUNT(*) as total
+    FROM classes
+    WHERE teacher_id = :teacher_id AND status = 'active'
+");
+$class_stmt->bindValue(':teacher_id', $teacher_db_id);
+$class_stmt->execute();
+$result = $class_stmt->fetch();
+$stats['classes'] = $result['total'] ?? 0;
+
+// Total Subjects
+$subject_stmt = $conn->prepare("
+    SELECT COUNT(DISTINCT s.id) as total
+    FROM subjects s
+    LEFT JOIN classes c ON s.class_id = c.id
+    WHERE c.teacher_id = :teacher_id OR s.teacher_id = :teacher_id
+");
+$subject_stmt->bindValue(':teacher_id', $teacher_db_id);
+$subject_stmt->execute();
+$result = $subject_stmt->fetch();
+$stats['subjects'] = $result['total'] ?? 0;
+
+// Today's Attendance Percentage
+$attendance_stmt = $conn->prepare("
+    SELECT 
+        COUNT(*) as total,
+        SUM(CASE WHEN a.status IN ('Present', 'Late') THEN 1 ELSE 0 END) as present
+    FROM attendance a
+    LEFT JOIN students s ON a.student_id = s.id
+    LEFT JOIN classes c ON s.class_id = c.id
+    WHERE c.teacher_id = :teacher_id AND a.attendance_date = CURDATE()
+");
+$attendance_stmt->bindValue(':teacher_id', $teacher_db_id);
+$attendance_stmt->execute();
+$attendance_data = $attendance_stmt->fetch();
+$stats['attendance'] = ($attendance_data['total'] > 0) ? round(($attendance_data['present'] / $attendance_data['total']) * 100) : 0;
+
+// Pending Assignments
+$assignment_stmt = $conn->prepare("
+    SELECT COUNT(*) as total
+    FROM assignments a
+    LEFT JOIN classes c ON a.class_id = c.id
+    WHERE c.teacher_id = :teacher_id AND a.status = 'active' AND a.due_date >= CURDATE()
+");
+$assignment_stmt->bindValue(':teacher_id', $teacher_db_id);
+$assignment_stmt->execute();
+$result = $assignment_stmt->fetch();
+$stats['assignments'] = $result['total'] ?? 0;
+
+// Upcoming Exams
+$exam_stmt = $conn->prepare("
+    SELECT COUNT(*) as total
+    FROM exams e
+    LEFT JOIN subjects s ON e.subject_id = s.id
+    LEFT JOIN classes c ON e.class_id = c.id
+    WHERE (s.teacher_id = :teacher_id OR c.teacher_id = :teacher_id) 
+        AND e.status = 'Scheduled' 
+        AND e.exam_date >= CURDATE()
+");
+$exam_stmt->bindValue(':teacher_id', $teacher_db_id);
+$exam_stmt->execute();
+$result = $exam_stmt->fetch();
+$stats['exams'] = $result['total'] ?? 0;
+
+// Get Today's Timetable
+$today = date('l');
+$timetable_stmt = $conn->prepare("
+    SELECT 
+        t.id,
+        t.time_slot,
+        t.room,
+        s.subject_title,
+        c.name as class_name,
+        c.grade as class_grade,
+        CASE 
+            WHEN t.time_slot < CURTIME() THEN 'Completed'
+            WHEN t.time_slot <= ADDTIME(CURTIME(), '01:00:00') THEN 'Upcoming'
+            ELSE 'Scheduled'
+        END as status
+    FROM timetable t
+    LEFT JOIN subjects s ON t.subject_id = s.id
+    LEFT JOIN classes c ON t.class_id = c.id
+    WHERE t.teacher_id = :teacher_id AND t.day_of_week = :day
+    ORDER BY t.time_slot ASC
+    LIMIT 5
+");
+$timetable_stmt->bindValue(':teacher_id', $teacher_db_id);
+$timetable_stmt->bindValue(':day', $today);
+$timetable_stmt->execute();
+$today_timetable = $timetable_stmt->fetchAll();
+
+// Get My Classes with student counts
+$classes_stmt = $conn->prepare("
+    SELECT 
+        c.id,
+        c.name,
+        c.grade,
+        c.room_no,
+        (SELECT COUNT(*) FROM students s WHERE s.class_id = c.id AND s.status = 'Active') as student_count
+    FROM classes c
+    WHERE c.teacher_id = :teacher_id AND c.status = 'active'
+    ORDER BY c.name
+    LIMIT 3
+");
+$classes_stmt->bindValue(':teacher_id', $teacher_db_id);
+$classes_stmt->execute();
+$my_classes = $classes_stmt->fetchAll();
+
+// Get Recent Attendance
+$recent_attendance_stmt = $conn->prepare("
+    SELECT 
+        CONCAT(s.first_name, ' ', s.last_name) as student_name,
+        c.name as class_name,
+        a.attendance_date,
+        a.status
+    FROM attendance a
+    LEFT JOIN students s ON a.student_id = s.id
+    LEFT JOIN classes c ON s.class_id = c.id
+    WHERE c.teacher_id = :teacher_id
+    ORDER BY a.attendance_date DESC, a.created_at DESC
+    LIMIT 5
+");
+$recent_attendance_stmt->bindValue(':teacher_id', $teacher_db_id);
+$recent_attendance_stmt->execute();
+$recent_attendance = $recent_attendance_stmt->fetchAll();
+
+// Get Pending Assignments
+$pending_assignments_stmt = $conn->prepare("
+    SELECT 
+        a.title,
+        s.subject_title,
+        c.name as class_name,
+        a.due_date
+    FROM assignments a
+    LEFT JOIN subjects s ON a.subject_id = s.id
+    LEFT JOIN classes c ON a.class_id = c.id
+    WHERE c.teacher_id = :teacher_id AND a.status = 'active' AND a.due_date >= CURDATE()
+    ORDER BY a.due_date ASC
+    LIMIT 5
+");
+$pending_assignments_stmt->bindValue(':teacher_id', $teacher_db_id);
+$pending_assignments_stmt->execute();
+$pending_assignments = $pending_assignments_stmt->fetchAll();
+
+// Get Upcoming Exams
+$upcoming_exams_stmt = $conn->prepare("
+    SELECT 
+        e.exam_title,
+        c.name as class_name,
+        s.subject_title,
+        e.exam_date,
+        e.start_time,
+        e.room,
+        e.status
+    FROM exams e
+    LEFT JOIN subjects s ON e.subject_id = s.id
+    LEFT JOIN classes c ON e.class_id = c.id
+    WHERE (s.teacher_id = :teacher_id OR c.teacher_id = :teacher_id) 
+        AND e.status = 'Scheduled' 
+        AND e.exam_date >= CURDATE()
+    ORDER BY e.exam_date ASC
+    LIMIT 5
+");
+$upcoming_exams_stmt->bindValue(':teacher_id', $teacher_db_id);
+$upcoming_exams_stmt->execute();
+$upcoming_exams = $upcoming_exams_stmt->fetchAll();
+
+// Get Latest Notices
+$notices_stmt = $conn->prepare("
+    SELECT id, title, category, details, posted_by, created_at
+    FROM notices
+    ORDER BY created_at DESC
+    LIMIT 4
+");
+$notices_stmt->execute();
+$latest_notices = $notices_stmt->fetchAll();
+
+// Function to get status badge class
+function getStatusBadgeClass($status)
+{
+  switch (strtolower($status)) {
+    case 'completed':
+      return 'bg-success';
+    case 'upcoming':
+      return 'bg-warning text-dark';
+    case 'scheduled':
+      return 'bg-secondary';
+    case 'pending':
+      return 'bg-warning text-dark';
+    case 'overdue':
+      return 'bg-danger';
+    case 'active':
+      return 'bg-info text-dark';
+    case 'present':
+      return 'bg-success';
+    case 'absent':
+      return 'bg-danger';
+    case 'late':
+      return 'bg-warning text-dark';
+    default:
+      return 'bg-secondary';
+  }
+}
+
+// Function to get category badge class
+function getCategoryBadgeClass($category)
+{
+  switch (strtolower($category)) {
+    case 'academic':
+      return 'bg-primary-subtle text-primary';
+    case 'administrative':
+      return 'bg-info-subtle text-info-emphasis';
+    case 'sports':
+      return 'bg-success-subtle text-success-emphasis';
+    case 'holiday':
+      return 'bg-danger-subtle text-danger-emphasis';
+    case 'event':
+      return 'bg-warning-subtle text-warning-emphasis';
+    case 'staff':
+      return 'bg-secondary-subtle text-secondary';
+    default:
+      return 'bg-light text-dark';
+  }
+}
+
+// Get unread message count
+$unread_stmt = $conn->prepare("
+    SELECT COUNT(*) as count
+    FROM messages
+    WHERE recipient_type = 'Teacher' AND recipient_id = :teacher_id AND is_read = 0
+");
+$unread_stmt->bindValue(':teacher_id', $teacher_db_id);
+$unread_stmt->execute();
+$unread_count = $unread_stmt->fetch()['count'] ?? 0;
+?>
 <!DOCTYPE html>
 <html lang="en">
 
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="description"
-    content="Crescent Public School — Student Portal Dashboard for Ahmed Faraz (Class 10-A, STU-1024)" />
-  <title>Dashboard &middot; Student Portal &middot; Crescent Public School</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
-  <link rel="stylesheet" href="css/style.css" />
-  <link rel="icon" href="assets/images/logo.svg" type="image/svg+xml" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Teacher Dashboard | Bright Future School</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    /* Sidebar Styles */
+    .td-wrapper {
+      display: flex;
+      min-height: 100vh;
+    }
+
+    .td-sidebar {
+      width: 260px;
+      background: #2c3e50;
+      color: #ecf0f1;
+      position: fixed;
+      height: 100vh;
+      overflow-y: auto;
+      z-index: 1000;
+      transition: transform 0.3s ease;
+    }
+
+    .td-main {
+      flex: 1;
+      margin-left: 260px;
+      background: #f4f6f9;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .td-brand {
+      padding: 20px;
+      font-size: 1.3rem;
+      font-weight: bold;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .td-brand i {
+      font-size: 1.8rem;
+      color: #3498db;
+    }
+
+    .td-brand small {
+      display: block;
+      font-size: 0.65rem;
+      font-weight: normal;
+      opacity: 0.7;
+    }
+
+    .td-teacher-box {
+      padding: 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .td-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: #3498db;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      color: white;
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+
+    .td-teacher-box h6 {
+      margin: 0;
+      font-size: 0.9rem;
+      color: white;
+    }
+
+    .td-teacher-box p {
+      margin: 0;
+      font-size: 0.75rem;
+      opacity: 0.7;
+    }
+
+    .td-nav {
+      padding: 10px 0;
+    }
+
+    .td-nav-title {
+      padding: 10px 20px;
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      opacity: 0.5;
+      letter-spacing: 1px;
+    }
+
+    .td-nav a {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 20px;
+      color: rgba(255, 255, 255, 0.7);
+      text-decoration: none;
+      transition: all 0.3s;
+      border-left: 3px solid transparent;
+    }
+
+    .td-nav a:hover {
+      background: rgba(255, 255, 255, 0.05);
+      color: white;
+    }
+
+    .td-nav a.active {
+      background: rgba(52, 152, 219, 0.2);
+      color: white;
+      border-left-color: #3498db;
+    }
+
+    .td-nav a.logout {
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      margin-top: 10px;
+      color: #e74c3c;
+    }
+
+    .td-nav a.logout:hover {
+      background: rgba(231, 76, 60, 0.1);
+    }
+
+    .td-nav a i {
+      width: 20px;
+    }
+
+    /* Navbar Styles */
+    .td-navbar {
+      background: white;
+      padding: 15px 25px;
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      flex-wrap: wrap;
+    }
+
+    .td-burger {
+      font-size: 1.5rem;
+      cursor: pointer;
+      display: none;
+    }
+
+    .td-page-title {
+      font-size: 1.2rem;
+      margin: 0;
+    }
+
+    .td-page-title small {
+      font-size: 0.75rem;
+      color: #6c757d;
+      font-weight: normal;
+    }
+
+    .td-search {
+      min-width: 200px;
+    }
+
+    .td-icon-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #f8f9fa;
+      color: #333;
+      text-decoration: none;
+      position: relative;
+      transition: background 0.3s;
+    }
+
+    .td-icon-btn:hover {
+      background: #e9ecef;
+      color: #333;
+    }
+
+    .td-icon-btn .badge-count {
+      position: absolute;
+      top: -5px;
+      right: -5px;
+      background: #e74c3c;
+      color: white;
+      font-size: 0.6rem;
+      padding: 2px 6px;
+      border-radius: 50%;
+      border: 2px solid white;
+    }
+
+    .td-dot {
+      width: 8px;
+      height: 8px;
+      background: #e74c3c;
+      border-radius: 50%;
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      border: 2px solid white;
+    }
+
+    .td-content {
+      padding: 25px;
+      flex: 1;
+    }
+
+    .td-footer {
+      background: white;
+      padding: 15px 25px;
+      text-align: center;
+      font-size: 0.85rem;
+      color: #6c757d;
+      border-top: 1px solid #e9ecef;
+    }
+
+    /* Stat Cards */
+    .stat-card {
+      padding: 15px;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      background: white;
+      transition: transform 0.2s;
+      border: none;
+    }
+
+    .stat-card:hover {
+      transform: translateY(-2px);
+    }
+
+    .stat-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 24px;
+      flex-shrink: 0;
+    }
+
+    .stat-card h3 {
+      margin: 0;
+      font-size: 1.5rem;
+    }
+
+    .stat-card p {
+      margin: 0;
+      color: #6c757d;
+      font-size: 0.85rem;
+    }
+
+    /* Section Title */
+    .section-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 15px;
+      color: #2c3e50;
+    }
+
+    .section-title i {
+      color: #3498db;
+      margin-right: 8px;
+    }
+
+    /* Class Cards */
+    .class-card {
+      border: none;
+      border-radius: 15px;
+      box-shadow: 0 2px 15px rgba(0, 0, 0, 0.08);
+      transition: transform 0.3s, box-shadow 0.3s;
+    }
+
+    .class-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 5px 25px rgba(0, 0, 0, 0.15);
+    }
+
+    .class-card .progress {
+      height: 6px;
+      border-radius: 3px;
+    }
+
+    /* Notice Cards */
+    .notice-card {
+      border: none;
+      border-radius: 12px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+      transition: transform 0.3s;
+    }
+
+    .notice-card:hover {
+      transform: translateY(-3px);
+    }
+
+    /* Gradient backgrounds */
+    .bg-grad-1 {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+
+    .bg-grad-2 {
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    }
+
+    .bg-grad-3 {
+      background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    }
+
+    .bg-grad-4 {
+      background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+    }
+
+    .bg-grad-5 {
+      background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+    }
+
+    .bg-grad-6 {
+      background: linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%);
+    }
+
+    /* Overlay for mobile */
+    .td-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 999;
+    }
+
+    #tdSidebarToggle {
+      display: none;
+    }
+
+    #tdSidebarToggle:checked~.td-overlay {
+      display: block;
+    }
+
+    #tdSidebarToggle:checked~.td-sidebar {
+      transform: translateX(0);
+    }
+
+    /* Responsive */
+    @media (max-width: 992px) {
+      .td-sidebar {
+        transform: translateX(-100%);
+      }
+
+      .td-main {
+        margin-left: 0;
+      }
+
+      .td-burger {
+        display: block;
+      }
+
+      #tdSidebarToggle:checked~.td-sidebar {
+        transform: translateX(0);
+      }
+
+      .td-search {
+        min-width: 150px;
+      }
+    }
+
+    @media (max-width: 576px) {
+      .td-navbar {
+        padding: 10px 15px;
+      }
+
+      .td-content {
+        padding: 15px;
+      }
+
+      .td-search {
+        min-width: 100px;
+        order: 10;
+        width: 100%;
+      }
+
+      .stat-card {
+        padding: 10px;
+        gap: 10px;
+      }
+
+      .stat-icon {
+        width: 36px;
+        height: 36px;
+        font-size: 18px;
+      }
+
+      .stat-card h3 {
+        font-size: 1.2rem;
+      }
+    }
+  </style>
 </head>
 
 <body>
+  <input type="checkbox" id="tdSidebarToggle">
+  <div class="td-wrapper">
+    <label for="tdSidebarToggle" class="td-overlay"></label>
 
-  <input type="checkbox" id="navToggle" class="nav-toggle" />
-  <label for="navToggle" class="nav-backdrop" aria-hidden="true"></label>
-
-  <!-- ================================ SIDEBAR ================================ -->
-  <aside class="app-sidebar">
-    <div class="sidebar-head">
-      <a href="index.php" class="sidebar-brand">
-        <img src="assets/images/logo.svg" alt="Crescent Public School logo" />
-        <span class="brand-text">
-          <strong>Crescent Public School</strong>
-          <small>Student Portal</small>
-        </span>
-      </a>
-      <label for="navToggle" class="sidebar-close" aria-label="Close navigation"><i class="bi bi-x-lg"></i></label>
-    </div>
-
-    <div class="student-card">
-      <span class="avatar avatar-lg">AF</span>
-      <div class="student-card-text">
-        <strong>Ahmed Faraz</strong>
-        <small>Class 10-A &middot; STU-1024</small>
+    <!-- Sidebar -->
+    <aside class="td-sidebar">
+      <div class="td-brand">
+        <i class="bi bi-mortarboard-fill"></i>
+        <span>Bright Future<small>School Portal</small></span>
       </div>
-      <span class="verify" title="Verified student"><i class="bi bi-patch-check-fill"></i></span>
-    </div>
-
-    <nav class="sidebar-nav">
-      <p class="nav-group">Overview</p>
-      <a class="nav-item active" href="index.php"><i class="bi bi-columns-gap"></i><span>Dashboard</span></a>
-
-      <p class="nav-group">Academics</p>
-      <a class="nav-item" href="subjects.php"><i class="bi bi-journal-bookmark"></i><span>My Subjects</span><em
-          class="nav-tag">6</em></a>
-      <a class="nav-item" href="timetable.php"><i class="bi bi-calendar-week"></i><span>My Timetable</span></a>
-      <a class="nav-item" href="attendance.php"><i class="bi bi-check2-square"></i><span>My Attendance</span></a>
-      <a class="nav-item" href="assignments.php"><i class="bi bi-journal-text"></i><span>Assignments</span><em
-          class="nav-tag nav-tag-warn">4</em></a>
-      <a class="nav-item" href="exams.php"><i class="bi bi-pencil-square"></i><span>Exams</span><em
-          class="nav-tag nav-tag-info">3</em></a>
-      <a class="nav-item" href="results.php"><i class="bi bi-graph-up-arrow"></i><span>Results</span></a>
-
-      <p class="nav-group">Finance</p>
-      <a class="nav-item" href="fees.php"><i class="bi bi-wallet2"></i><span>Fees</span><em
-          class="nav-tag nav-tag-danger">1</em></a>
-
-      <p class="nav-group">School Life</p>
-      <a class="nav-item" href="notices.php"><i class="bi bi-megaphone"></i><span>Notices</span></a>
-      <a class="nav-item" href="events.php"><i class="bi bi-calendar2-heart"></i><span>Events</span></a>
-      <a class="nav-item" href="messages.php"><i class="bi bi-envelope"></i><span>Messages</span><em
-          class="nav-tag">3</em></a>
-
-      <p class="nav-group">Account</p>
-      <a class="nav-item" href="profile.php"><i class="bi bi-person-badge"></i><span>My Profile</span></a>
-      <a class="nav-item" href="settings.php"><i class="bi bi-gear"></i><span>Settings</span></a>
-    </nav>
-
-    <div class="sidebar-foot">
-      <a href="#" class="logout-btn"><i class="bi bi-box-arrow-right"></i><span>Logout</span></a>
-      <p class="copy">Portal v2.6 &middot; Session 2026&ndash;27</p>
-    </div>
-  </aside>
-
-  <!-- ================================= MAIN ================================= -->
-  <div class="app-main">
-
-    <header class="app-topbar">
-      <label for="navToggle" class="nav-btn" aria-label="Open navigation"><i class="bi bi-list"></i></label>
-      <div class="topbar-title">
-        <h1>Dashboard</h1>
-        <div class="crumbs"><a href="index.php">Home</a><span>/</span>Dashboard</div>
-      </div>
-
-      <div class="topbar-search">
-        <i class="bi bi-search"></i>
-        <input type="search" placeholder="Search subjects, assignments, notices&hellip;" aria-label="Search" />
-      </div>
-
-      <div class="topbar-actions">
-        <div class="icon-drop">
-          <a href="notices.php" class="icon-btn" aria-label="Notifications"><i class="bi bi-bell"></i><span
-              class="ping">5</span></a>
-          <div class="drop-panel">
-            <div class="drop-head"><strong>Notifications</strong><a href="notices.php">View all</a></div>
-            <a href="exams.php" class="drop-row"><i class="dot-ico p-info"><i class="bi bi-pencil-square"></i></i><span>
-                <p>Mid-Term timetable published</p><small>Examination Cell &middot; 2 hours ago</small>
-              </span></a>
-            <a href="assignments.php" class="drop-row"><i class="dot-ico p-warn"><i
-                  class="bi bi-journal-text"></i></i><span>
-                <p>Algebra Worksheet due in 5 days</p><small>Mr. Ahmed &middot; yesterday</small>
-              </span></a>
-            <a href="results.php" class="drop-row"><i class="dot-ico p-ok"><i
-                  class="bi bi-graph-up-arrow"></i></i><span>
-                <p>Physics quiz result uploaded</p><small>Ms. Sara &middot; 2 days ago</small>
-              </span></a>
-            <a href="fees.php" class="drop-row"><i class="dot-ico p-danger"><i class="bi bi-wallet2"></i></i><span>
-                <p>Fee instalment due on Sep 10</p><small>Accounts Office &middot; 3 days ago</small>
-              </span></a>
-          </div>
+      <div class="td-teacher-box">
+        <div class="td-avatar">
+          <?php echo $teacher_initials; ?>
         </div>
-
-        <div class="icon-drop">
-          <a href="messages.php" class="icon-btn" aria-label="Messages"><i class="bi bi-envelope"></i><span
-              class="ping">3</span></a>
-          <div class="drop-panel">
-            <div class="drop-head"><strong>Messages</strong><a href="messages.php">Open inbox</a></div>
-            <a href="messages.php" class="drop-row"><span class="avatar info">SR</span><span>
-                <p>Ms. Sara Khan &middot; Lab report feedback</p><small>Today, 09:14 AM</small>
-              </span></a>
-            <a href="messages.php" class="drop-row"><span class="avatar amber">CP</span><span>
-                <p>Class Teacher &middot; PTM confirmation</p><small>Yesterday, 04:02 PM</small>
-              </span></a>
-            <a href="messages.php" class="drop-row"><span class="avatar violet">AD</span><span>
-                <p>Admin Office &middot; Sports day consent</p><small>Aug 24, 2026</small>
-              </span></a>
-          </div>
-        </div>
-
-        <div class="icon-drop">
-          <a href="profile.php" class="profile-chip">
-            <span class="avatar">AF</span>
-            <span class="who"><b>Ahmed Faraz</b><small>Class 10-A</small></span>
-            <i class="bi bi-chevron-down"></i>
-          </a>
-          <div class="drop-panel">
-            <div class="drop-head"><strong>Ahmed Faraz</strong><span class="pill p-ok">Active</span></div>
-            <a href="profile.php" class="drop-row"><i class="dot-ico p-teal"><i
-                  class="bi bi-person-badge"></i></i><span>
-                <p>My Profile</p><small>STU-1024</small>
-              </span></a>
-            <a href="results.php" class="drop-row"><i class="dot-ico p-ok"><i class="bi bi-award"></i></i><span>
-                <p>My Results</p><small>GPA 3.7</small>
-              </span></a>
-            <a href="settings.php" class="drop-row"><i class="dot-ico p-violet"><i class="bi bi-gear"></i></i><span>
-                <p>Settings</p><small>Preferences &amp; alerts</small>
-              </span></a>
-            <a href="#" class="drop-row"><i class="dot-ico p-danger"><i class="bi bi-box-arrow-right"></i></i><span>
-                <p>Logout</p><small>End this session</small>
-              </span></a>
-          </div>
+        <div>
+          <h6>
+            <?php echo htmlspecialchars($teacher_name); ?>
+          </h6>
+          <p>Mathematics Teacher</p>
         </div>
       </div>
-    </header>
+      <nav class="td-nav">
+        <div class="td-nav-title">Main</div>
+        <a href="index.php" class="active"><i class="bi bi-speedometer2"></i> Dashboard</a>
+        <a href="students.php"><i class="bi bi-people"></i> My Students</a>
+        <a href="attendance.php"><i class="bi bi-calendar2-check"></i> Attendance</a>
+        <a href="subjects.php"><i class="bi bi-journal-bookmark"></i> My Subjects</a>
+        <a href="timetable.php"><i class="bi bi-clock-history"></i> My Timetable</a>
+        <div class="td-nav-title">Academics</div>
+        <a href="assignments.php"><i class="bi bi-file-earmark-text"></i> Assignments</a>
+        <a href="exams.php"><i class="bi bi-pencil-square"></i> Exams</a>
+        <a href="results.php"><i class="bi bi-bar-chart-line"></i> Results</a>
+        <div class="td-nav-title">Communication</div>
+        <a href="notices.php"><i class="bi bi-megaphone"></i> Notices</a>
+        <a href="messages.php"><i class="bi bi-chat-dots"></i> Messages</a>
+        <div class="td-nav-title">Account</div>
+        <a href="profile.php"><i class="bi bi-person-badge"></i> My Profile</a>
+        <a href="settings.php"><i class="bi bi-gear"></i> Settings</a>
+        <a href="#" class="logout"><i class="bi bi-box-arrow-right"></i> Logout</a>
+      </nav>
+    </aside>
 
-    <main class="app-content">
-
-      <!-- ------------------------------ WELCOME ------------------------------ -->
-      <section class="welcome rise">
-        <div class="row g-4 align-items-center">
-          <div class="col-lg-7">
-            <span class="eyebrow">Monday &middot; 24 August 2026 &middot; Term 1, Week 09</span>
-            <h2>Good morning, Ahmed. You have 3 classes left today.</h2>
-            <p>Your Physics lab report is due in 8 days, the Mid-Term examination schedule has just been published, and
-              one fee instalment is pending before 10 September.</p>
-            <div class="quick-chips">
-              <a href="timetable.php" class="chip"><i class="bi bi-calendar-week"></i> My Timetable</a>
-              <a href="assignments.php" class="chip"><i class="bi bi-journal-text"></i> 4 Pending Tasks</a>
-              <a href="exams.php" class="chip"><i class="bi bi-pencil-square"></i> Exam Schedule</a>
-              <a href="fees.php" class="chip"><i class="bi bi-wallet2"></i> Pay Fees</a>
-              <a href="messages.php" class="chip"><i class="bi bi-envelope"></i> 3 Unread</a>
-            </div>
-          </div>
-          <div class="col-lg-5">
-            <div class="row g-2">
-              <div class="col-6">
-                <div class="fact"><small>Next Class</small><strong>Physics &middot; 09:00</strong><span>Room 105
-                    &middot; Ms. Sara</span></div>
-              </div>
-              <div class="col-6">
-                <div class="fact"><small>Attendance</small><strong>92%</strong><span>2 missed this term</span></div>
-              </div>
-              <div class="col-6">
-                <div class="fact"><small>Current GPA</small><strong>3.7 / 4.0</strong><span>Top 8% of class</span></div>
-              </div>
-              <div class="col-6">
-                <div class="fact"><small>Fees Due</small><strong>Rs. 8,500</strong><span>By 10 Sep 2026</span></div>
-              </div>
-            </div>
+    <!-- Main Content -->
+    <div class="td-main">
+      <!-- Navbar -->
+      <header class="td-navbar">
+        <label for="tdSidebarToggle" class="td-burger"><i class="bi bi-list"></i></label>
+        <h1 class="td-page-title">Teacher Dashboard <small>Welcome back,
+            <?php echo htmlspecialchars($teacher_name); ?>
+          </small></h1>
+        <div class="td-search ms-auto">
+          <div class="input-group">
+            <span class="input-group-text bg-white border-end-0"><i class="bi bi-search"></i></span>
+            <input type="search" class="form-control border-start-0" placeholder="Search students, classes..."
+              id="globalSearch">
           </div>
         </div>
-      </section>
+        <a href="notices.php" class="td-icon-btn"><i class="bi bi-bell"></i><span class="td-dot"></span></a>
+        <a href="messages.php" class="td-icon-btn position-relative">
+          <i class="bi bi-envelope"></i>
+          <?php if ($unread_count > 0): ?>
+            <span class="badge-count">
+              <?php echo $unread_count; ?>
+            </span>
+          <?php endif; ?>
+        </a>
+        <a href="profile.php" class="d-flex align-items-center gap-2 text-dark text-decoration-none">
+          <span class="td-avatar">
+            <?php echo $teacher_initials; ?>
+          </span>
+          <span class="d-none d-md-block">
+            <strong class="d-block" style="font-size:.85rem">
+              <?php echo htmlspecialchars($teacher_name); ?>
+            </strong>
+            <small class="text-muted" style="font-size:.72rem">Mathematics Teacher</small>
+          </span>
+        </a>
+      </header>
 
-      <!-- ------------------------------ STATISTICS ------------------------------ -->
-      <section class="mt-4">
-        <div class="row g-3">
-          <div class="col-6 col-md-4 col-xl-2 rise rise-1">
-            <div class="stat-card teal">
-              <div class="stat-top"><span class="stat-ico"><i class="bi bi-journal-bookmark"></i></span><span
-                  class="stat-trend flat">Term 1</span></div>
-              <h3 class="stat-num">06</h3>
-              <p class="stat-title">My Subjects</p>
-              <p class="stat-desc">All core subjects of Class 10-A</p>
-              <span class="stat-bar"><i style="width:100%"></i></span>
-            </div>
-          </div>
-          <div class="col-6 col-md-4 col-xl-2 rise rise-2">
-            <div class="stat-card ok">
-              <div class="stat-top"><span class="stat-ico"><i class="bi bi-check2-circle"></i></span><span
-                  class="stat-trend">+2.1%</span></div>
-              <h3 class="stat-num">92<small>%</small></h3>
-              <p class="stat-title">Attendance</p>
-              <p class="stat-desc">110 of 120 classes attended</p>
-              <span class="stat-bar"><i style="width:92%"></i></span>
-            </div>
-          </div>
-          <div class="col-6 col-md-4 col-xl-2 rise rise-3">
-            <div class="stat-card amber">
-              <div class="stat-top"><span class="stat-ico"><i class="bi bi-journal-text"></i></span><span
-                  class="stat-trend down">1 overdue</span></div>
-              <h3 class="stat-num">04</h3>
-              <p class="stat-title">Pending Assignments</p>
-              <p class="stat-desc">Next due: Algebra Worksheet</p>
-              <span class="stat-bar"><i style="width:40%"></i></span>
-            </div>
-          </div>
-          <div class="col-6 col-md-4 col-xl-2 rise rise-4">
-            <div class="stat-card info">
-              <div class="stat-top"><span class="stat-ico"><i class="bi bi-pencil-square"></i></span><span
-                  class="stat-trend flat">12 days left</span></div>
-              <h3 class="stat-num">03</h3>
-              <p class="stat-title">Upcoming Exams</p>
-              <p class="stat-desc">Mid-Terms start 05 Sep 2026</p>
-              <span class="stat-bar"><i style="width:55%"></i></span>
-            </div>
-          </div>
-          <div class="col-6 col-md-4 col-xl-2 rise rise-5">
-            <div class="stat-card violet">
-              <div class="stat-top"><span class="stat-ico"><i class="bi bi-graph-up-arrow"></i></span><span
-                  class="stat-trend">+0.2</span></div>
-              <h3 class="stat-num">3.7</h3>
-              <p class="stat-title">Current GPA</p>
-              <p class="stat-desc">Grade A average this term</p>
-              <span class="stat-bar"><i style="width:88%"></i></span>
-            </div>
-          </div>
-          <div class="col-6 col-md-4 col-xl-2 rise rise-6">
-            <div class="stat-card danger">
-              <div class="stat-top"><span class="stat-ico"><i class="bi bi-wallet2"></i></span><span
-                  class="stat-trend down">Sep 10</span></div>
-              <h3 class="stat-num">Rs.<small>8,500</small></h3>
-              <p class="stat-title">Fees Due</p>
-              <p class="stat-desc">September instalment pending</p>
-              <span class="stat-bar"><i style="width:14%"></i></span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- ------------------ TODAY'S TIMETABLE + ATTENDANCE ------------------ -->
-      <section class="row g-3 mt-1">
-        <div class="col-xl-8 rise">
-          <div class="card lift h-100">
-            <div class="card-head">
+      <main class="td-content">
+        <!-- STATS -->
+        <div class="row g-3 mb-4">
+          <div class="col-6 col-lg-4 col-xl-2">
+            <div class="card stat-card">
+              <div class="stat-icon bg-grad-1"><i class="bi bi-people-fill"></i></div>
               <div>
-                <h3>Today&rsquo;s Timetable <span class="sub">Monday, 24 August 2026 &middot; 6 periods</span></h3>
+                <h3>
+                  <?php echo $stats['students']; ?>
+                </h3>
+                <p>My Students</p>
               </div>
-              <a href="timetable.php" class="mini-link">Full Week <i class="bi bi-arrow-right"></i></a>
             </div>
-            <div class="table-responsive">
-              <table class="table">
-                <thead>
-                  <tr>
-                    <th>Time</th>
-                    <th>Subject</th>
-                    <th>Teacher</th>
-                    <th>Room</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td class="t-strong">08:00 AM &ndash; 09:00 AM</td>
-                    <td><span class="subject-chip s-math"><i class="bi bi-calculator"></i>Mathematics</span></td>
-                    <td>Mr. Ahmed</td>
-                    <td>Room 201</td>
-                    <td><span class="pill p-grey">Completed</span></td>
-                  </tr>
-                  <tr>
-                    <td class="t-strong">09:00 AM &ndash; 10:00 AM</td>
-                    <td><span class="subject-chip s-phy"><i class="bi bi-lightning-charge"></i>Physics</span></td>
-                    <td>Ms. Sara</td>
-                    <td>Room 105</td>
-                    <td><span class="pill p-info">Ongoing</span></td>
-                  </tr>
-                  <tr>
-                    <td class="t-strong">10:00 AM &ndash; 10:30 AM</td>
-                    <td colspan="4" class="text-muted fst-italic">Morning break &middot; School courtyard</td>
-                  </tr>
-                  <tr>
-                    <td class="t-strong">10:30 AM &ndash; 11:30 AM</td>
-                    <td><span class="subject-chip s-cs"><i class="bi bi-pc-display"></i>Computer Science</span></td>
-                    <td>Mr. Ali</td>
-                    <td>Lab 2</td>
-                    <td><span class="pill p-teal">Upcoming</span></td>
-                  </tr>
-                  <tr>
-                    <td class="t-strong">11:30 AM &ndash; 12:30 PM</td>
-                    <td><span class="subject-chip s-eng"><i class="bi bi-book"></i>English</span></td>
-                    <td>Ms. Hina</td>
-                    <td>Room 118</td>
-                    <td><span class="pill p-teal">Upcoming</span></td>
-                  </tr>
-                  <tr>
-                    <td class="t-strong">12:30 PM &ndash; 01:15 PM</td>
-                    <td colspan="4" class="text-muted fst-italic">Lunch &amp; prayer break</td>
-                  </tr>
-                  <tr>
-                    <td class="t-strong">01:15 PM &ndash; 02:15 PM</td>
-                    <td><span class="subject-chip s-urdu"><i class="bi bi-pen"></i>Urdu</span></td>
-                    <td>Mr. Tariq</td>
-                    <td>Room 204</td>
-                    <td><span class="pill p-teal">Upcoming</span></td>
-                  </tr>
-                </tbody>
-              </table>
+          </div>
+          <div class="col-6 col-lg-4 col-xl-2">
+            <div class="card stat-card">
+              <div class="stat-icon bg-grad-2"><i class="bi bi-building"></i></div>
+              <div>
+                <h3>
+                  <?php echo $stats['classes']; ?>
+                </h3>
+                <p>My Classes</p>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-lg-4 col-xl-2">
+            <div class="card stat-card">
+              <div class="stat-icon bg-grad-3"><i class="bi bi-journal-bookmark-fill"></i></div>
+              <div>
+                <h3>
+                  <?php echo $stats['subjects']; ?>
+                </h3>
+                <p>My Subjects</p>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-lg-4 col-xl-2">
+            <div class="card stat-card">
+              <div class="stat-icon bg-grad-4"><i class="bi bi-calendar2-check-fill"></i></div>
+              <div>
+                <h3>
+                  <?php echo $stats['attendance']; ?>%
+                </h3>
+                <p>Today's Attendance</p>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-lg-4 col-xl-2">
+            <div class="card stat-card">
+              <div class="stat-icon bg-grad-5"><i class="bi bi-file-earmark-text-fill"></i></div>
+              <div>
+                <h3>
+                  <?php echo $stats['assignments']; ?>
+                </h3>
+                <p>Pending Assignments</p>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-lg-4 col-xl-2">
+            <div class="card stat-card">
+              <div class="stat-icon bg-grad-6"><i class="bi bi-pencil-square"></i></div>
+              <div>
+                <h3>
+                  <?php echo $stats['exams']; ?>
+                </h3>
+                <p>Upcoming Exams</p>
+              </div>
             </div>
           </div>
         </div>
 
-        <div class="col-xl-4 rise rise-2">
-          <div class="card lift h-100">
-            <div class="card-head">
-              <h3>Attendance Summary <span class="sub">Session 2026&ndash;27, Term 1</span></h3>
-            </div>
-            <div class="card-body text-center">
-              <div class="donut">
-                <div class="donut-mid"><b>92%</b><small>Present</small></div>
-              </div>
-              <div class="legend">
-                <div class="legend-row"><i class="dot" style="background:var(--ok)"></i><span>Present &middot; 110
-                    classes</span><b>92%</b></div>
-                <div class="legend-row"><i class="dot" style="background:var(--danger)"></i><span>Absent &middot; 6
-                    classes</span><b>5%</b></div>
-                <div class="legend-row"><i class="dot" style="background:var(--accent)"></i><span>Late &middot; 4
-                    classes</span><b>3%</b></div>
-              </div>
-              <div class="divider-soft"></div>
-              <a href="attendance.php" class="btn-solid w-100 justify-content-center"><i class="bi bi-bar-chart"></i>
-                Detailed Report</a>
-            </div>
+        <!-- TIMETABLE -->
+        <div class="card mb-4">
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-clock me-2 text-primary"></i>Today's Timetable</span>
+            <a href="timetable.php" class="btn btn-sm btn-outline-primary">Full Timetable</a>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-hover align-middle">
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Class</th>
+                  <th>Subject</th>
+                  <th>Room</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <?php if (count($today_timetable) > 0): ?>
+                  <?php foreach ($today_timetable as $slot): ?>
+                    <tr>
+                      <td>
+                        <?php echo htmlspecialchars($slot['time_slot']); ?>
+                      </td>
+                      <td>
+                        <?php echo htmlspecialchars($slot['class_name'] . ' - ' . $slot['class_grade']); ?>
+                      </td>
+                      <td>
+                        <?php echo htmlspecialchars($slot['subject_title']); ?>
+                      </td>
+                      <td>
+                        <?php echo htmlspecialchars($slot['room'] ?? 'N/A'); ?>
+                      </td>
+                      <td>
+                        <span class="badge <?php echo getStatusBadgeClass($slot['status']); ?>">
+                          <?php echo $slot['status']; ?>
+                        </span>
+                      </td>
+                    </tr>
+                  <?php endforeach; ?>
+                <?php else: ?>
+                  <tr>
+                    <td colspan="5" class="text-center text-muted py-3">
+                      <i class="bi bi-clock me-1"></i> No classes scheduled for today
+                    </td>
+                  </tr>
+                <?php endif; ?>
+              </tbody>
+            </table>
           </div>
         </div>
-      </section>
 
-      <!-- ------------------------------ MY SUBJECTS ------------------------------ -->
-      <section class="mt-4 rise">
-        <div class="section-head">
-          <div>
-            <span class="eyebrow">Enrolment</span>
-            <h2>My Subjects</h2>
-            <p>Six core subjects for Class 10-A this session.</p>
-          </div>
-          <a href="subjects.php" class="mini-link">All Subjects <i class="bi bi-arrow-right"></i></a>
+        <!-- MY CLASSES -->
+        <h2 class="section-title"><i class="bi bi-building"></i> My Classes</h2>
+        <div class="row g-3 mb-4">
+          <?php if (count($my_classes) > 0): ?>
+            <?php foreach ($my_classes as $class): ?>
+              <div class="col-md-6 col-xl-4">
+                <div class="card class-card h-100">
+                  <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                      <h5 class="fw-bold mb-0">
+                        <?php echo htmlspecialchars($class['name'] . ' - ' . $class['grade']); ?>
+                      </h5>
+                      <span class="badge bg-primary-subtle text-primary">
+                        <?php echo htmlspecialchars($class['room_no'] ?? 'No Room'); ?>
+                      </span>
+                    </div>
+                    <p class="text-muted small mb-3">Subject: Mathematics</p>
+                    <div class="d-flex justify-content-between small mb-1">
+                      <span>Students</span>
+                      <strong>
+                        <?php echo $class['student_count']; ?>
+                      </strong>
+                    </div>
+                    <div class="progress mb-3">
+                      <div class="progress-bar bg-success" style="width: 75%;"></div>
+                    </div>
+                    <div class="d-flex gap-2">
+                      <a href="students.php?class=<?php echo $class['id']; ?>" class="btn btn-primary btn-sm">View
+                        Students</a>
+                      <a href="attendance.php?class=<?php echo $class['id']; ?>"
+                        class="btn btn-outline-secondary btn-sm">Attendance</a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            <?php endforeach; ?>
+          <?php else: ?>
+            <div class="col-12">
+              <div class="text-center py-4 text-muted">
+                <i class="bi bi-building fs-1 d-block mb-2"></i>
+                <p>No classes assigned yet</p>
+              </div>
+            </div>
+          <?php endif; ?>
         </div>
+
+        <div class="row g-3 mb-4">
+          <!-- RECENT ATTENDANCE -->
+          <div class="col-xl-6">
+            <div class="card h-100">
+              <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-calendar2-check me-2 text-primary"></i>Recent Attendance</span>
+                <a href="attendance.php" class="btn btn-sm btn-outline-primary">View All</a>
+              </div>
+              <div class="table-responsive">
+                <table class="table table-hover">
+                  <thead>
+                    <tr>
+                      <th>Student</th>
+                      <th>Class</th>
+                      <th>Date</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <?php if (count($recent_attendance) > 0): ?>
+                      <?php foreach ($recent_attendance as $att): ?>
+                        <tr>
+                          <td>
+                            <?php echo htmlspecialchars($att['student_name']); ?>
+                          </td>
+                          <td>
+                            <?php echo htmlspecialchars($att['class_name']); ?>
+                          </td>
+                          <td>
+                            <?php echo date('d M Y', strtotime($att['attendance_date'])); ?>
+                          </td>
+                          <td>
+                            <span class="badge <?php echo getStatusBadgeClass($att['status']); ?>">
+                              <?php echo $att['status']; ?>
+                            </span>
+                          </td>
+                        </tr>
+                      <?php endforeach; ?>
+                    <?php else: ?>
+                      <tr>
+                        <td colspan="4" class="text-center text-muted py-3">No attendance records found</td>
+                      </tr>
+                    <?php endif; ?>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- PENDING ASSIGNMENTS -->
+          <div class="col-xl-6">
+            <div class="card h-100">
+              <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-file-earmark-text me-2 text-primary"></i>Pending Assignments</span>
+                <a href="assignments.php" class="btn btn-sm btn-outline-primary">View All</a>
+              </div>
+              <div class="table-responsive">
+                <table class="table table-hover">
+                  <thead>
+                    <tr>
+                      <th>Assignment</th>
+                      <th>Subject</th>
+                      <th>Class</th>
+                      <th>Due Date</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <?php if (count($pending_assignments) > 0): ?>
+                      <?php foreach ($pending_assignments as $assign):
+                        $is_overdue = strtotime($assign['due_date']) < time();
+                        $status = $is_overdue ? 'Overdue' : 'Pending';
+                        ?>
+                        <tr>
+                          <td>
+                            <?php echo htmlspecialchars($assign['title']); ?>
+                          </td>
+                          <td>
+                            <?php echo htmlspecialchars($assign['subject_title']); ?>
+                          </td>
+                          <td>
+                            <?php echo htmlspecialchars($assign['class_name']); ?>
+                          </td>
+                          <td>
+                            <?php echo date('d M Y', strtotime($assign['due_date'])); ?>
+                          </td>
+                          <td>
+                            <span class="badge <?php echo $is_overdue ? 'bg-danger' : 'bg-warning text-dark'; ?>">
+                              <?php echo $status; ?>
+                            </span>
+                          </td>
+                        </tr>
+                      <?php endforeach; ?>
+                    <?php else: ?>
+                      <tr>
+                        <td colspan="5" class="text-center text-muted py-3">No pending assignments</td>
+                      </tr>
+                    <?php endif; ?>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- UPCOMING EXAMS -->
+        <div class="card mb-4">
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-pencil-square me-2 text-primary"></i>Upcoming Exams</span>
+            <a href="exams.php" class="btn btn-sm btn-outline-primary">All Exams</a>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-hover">
+              <thead>
+                <tr>
+                  <th>Exam</th>
+                  <th>Class</th>
+                  <th>Subject</th>
+                  <th>Date</th>
+                  <th>Time</th>
+                  <th>Room</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <?php if (count($upcoming_exams) > 0): ?>
+                  <?php foreach ($upcoming_exams as $exam): ?>
+                    <tr>
+                      <td>
+                        <?php echo htmlspecialchars($exam['exam_title']); ?>
+                      </td>
+                      <td>
+                        <?php echo htmlspecialchars($exam['class_name']); ?>
+                      </td>
+                      <td>
+                        <?php echo htmlspecialchars($exam['subject_title']); ?>
+                      </td>
+                      <td>
+                        <?php echo date('d M Y', strtotime($exam['exam_date'])); ?>
+                      </td>
+                      <td>
+                        <?php echo date('h:i A', strtotime($exam['start_time'])); ?>
+                      </td>
+                      <td>
+                        <?php echo htmlspecialchars($exam['room'] ?? 'N/A'); ?>
+                      </td>
+                      <td>
+                        <span class="badge <?php echo getStatusBadgeClass($exam['status']); ?>">
+                          <?php echo $exam['status']; ?>
+                        </span>
+                      </td>
+                    </tr>
+                  <?php endforeach; ?>
+                <?php else: ?>
+                  <tr>
+                    <td colspan="7" class="text-center text-muted py-3">No upcoming exams</td>
+                  </tr>
+                <?php endif; ?>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- NOTICES -->
+        <h2 class="section-title"><i class="bi bi-megaphone"></i> Latest Notices</h2>
         <div class="row g-3">
-          <div class="col-md-6 col-xl-4">
-            <div class="subject-card s-math">
-              <span class="ribbon"></span><span class="code">MTH-101</span>
-              <span class="subject-ico"><i class="bi bi-calculator"></i></span>
-              <h3>Mathematics</h3>
-              <p class="teacher"><i class="bi bi-person"></i> Mr. Ahmed Raza</p>
-              <ul class="meta-list">
-                <li><i class="bi bi-mortarboard"></i> Class <span>10-A</span></li>
-                <li><i class="bi bi-people"></i> Students <span>32</span></li>
-                <li><i class="bi bi-door-open"></i> Room <span>201</span></li>
-              </ul>
-              <a href="subjects.php" class="mini-link">View Subject <i class="bi bi-arrow-right"></i></a>
-            </div>
-          </div>
-          <div class="col-md-6 col-xl-4">
-            <div class="subject-card s-phy">
-              <span class="ribbon"></span><span class="code">PHY-102</span>
-              <span class="subject-ico"><i class="bi bi-lightning-charge"></i></span>
-              <h3>Physics</h3>
-              <p class="teacher"><i class="bi bi-person"></i> Ms. Sara Khan</p>
-              <ul class="meta-list">
-                <li><i class="bi bi-mortarboard"></i> Class <span>10-A</span></li>
-                <li><i class="bi bi-people"></i> Students <span>30</span></li>
-                <li><i class="bi bi-door-open"></i> Room <span>105</span></li>
-              </ul>
-              <a href="subjects.php" class="mini-link">View Subject <i class="bi bi-arrow-right"></i></a>
-            </div>
-          </div>
-          <div class="col-md-6 col-xl-4">
-            <div class="subject-card s-cs">
-              <span class="ribbon"></span><span class="code">CSC-104</span>
-              <span class="subject-ico"><i class="bi bi-pc-display"></i></span>
-              <h3>Computer Science</h3>
-              <p class="teacher"><i class="bi bi-person"></i> Mr. Ali Hassan</p>
-              <ul class="meta-list">
-                <li><i class="bi bi-mortarboard"></i> Class <span>10-A</span></li>
-                <li><i class="bi bi-people"></i> Students <span>28</span></li>
-                <li><i class="bi bi-door-open"></i> Room <span>Lab 2</span></li>
-              </ul>
-              <a href="subjects.php" class="mini-link">View Subject <i class="bi bi-arrow-right"></i></a>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- ------------------ ASSIGNMENTS + EXAMS ------------------ -->
-      <section class="row g-3 mt-1 rise">
-        <div class="col-xl-7">
-          <div class="card lift h-100">
-            <div class="card-head">
-              <h3>Upcoming Assignments <span class="sub">4 pending &middot; 6 submitted this term</span></h3>
-              <a href="assignments.php" class="mini-link amber">View All <i class="bi bi-arrow-right"></i></a>
-            </div>
-            <div class="table-responsive">
-              <table class="table">
-                <thead>
-                  <tr>
-                    <th>Assignment</th>
-                    <th>Subject</th>
-                    <th>Assigned</th>
-                    <th>Due Date</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td class="t-strong">Algebra Worksheet</td>
-                    <td>Mathematics</td>
-                    <td>Aug 25, 2026</td>
-                    <td>Aug 30, 2026</td>
-                    <td><span class="pill p-warn">Pending</span></td>
-                  </tr>
-                  <tr>
-                    <td class="t-strong">Physics Lab Report</td>
-                    <td>Physics</td>
-                    <td>Aug 26, 2026</td>
-                    <td>Sep 01, 2026</td>
-                    <td><span class="pill p-ok">Submitted</span></td>
-                  </tr>
-                  <tr>
-                    <td class="t-strong">Chemical Bonding Notes</td>
-                    <td>Chemistry</td>
-                    <td>Aug 20, 2026</td>
-                    <td>Aug 28, 2026</td>
-                    <td><span class="pill p-warn">Pending</span></td>
-                  </tr>
-                  <tr>
-                    <td class="t-strong">Essay: My City</td>
-                    <td>English</td>
-                    <td>Aug 18, 2026</td>
-                    <td>Aug 22, 2026</td>
-                    <td><span class="pill p-danger">Overdue</span></td>
-                  </tr>
-                  <tr>
-                    <td class="t-strong">HTML Webpage Task</td>
-                    <td>Computer Science</td>
-                    <td>Aug 15, 2026</td>
-                    <td>Aug 21, 2026</td>
-                    <td><span class="pill p-ok">Submitted</span></td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-        <div class="col-xl-5">
-          <div class="card lift h-100">
-            <div class="card-head">
-              <h3>Upcoming Exams <span class="sub">Mid-Term Examination 2026</span></h3>
-              <a href="exams.php" class="mini-link">Schedule <i class="bi bi-arrow-right"></i></a>
-            </div>
-            <div class="table-responsive">
-              <table class="table">
-                <thead>
-                  <tr>
-                    <th>Exam</th>
-                    <th>Date</th>
-                    <th>Time</th>
-                    <th>Room</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td class="t-strong">Mid-Term Examination<span class="t-sub">Mathematics</span></td>
-                    <td>Sep 05, 2026</td>
-                    <td>09:00 AM</td>
-                    <td>Room 201</td>
-                    <td><span class="pill p-info">Upcoming</span></td>
-                  </tr>
-                  <tr>
-                    <td class="t-strong">Mid-Term Examination<span class="t-sub">Physics</span></td>
-                    <td>Sep 07, 2026</td>
-                    <td>09:00 AM</td>
-                    <td>Room 105</td>
-                    <td><span class="pill p-info">Upcoming</span></td>
-                  </tr>
-                  <tr>
-                    <td class="t-strong">Mid-Term Examination<span class="t-sub">Computer Science</span></td>
-                    <td>Sep 09, 2026</td>
-                    <td>09:00 AM</td>
-                    <td>Lab 2</td>
-                    <td><span class="pill p-info">Upcoming</span></td>
-                  </tr>
-                  <tr>
-                    <td class="t-strong">Chapter Test<span class="t-sub">Chemistry</span></td>
-                    <td>Sep 12, 2026</td>
-                    <td>11:00 AM</td>
-                    <td>Room 110</td>
-                    <td><span class="pill p-grey">Scheduled</span></td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <div class="card-body">
-              <div class="alert-soft teal"><i class="bi bi-lightbulb"></i><span><b>Study tip:</b> 12 days remain before
-                  Mid-Terms. Revise Chapter 4 of Physics and complete all Algebra practice sets first.</span></div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- ------------------ RECENT ATTENDANCE + RESULTS ------------------ -->
-      <section class="row g-3 mt-1 rise">
-        <div class="col-xl-5">
-          <div class="card lift h-100">
-            <div class="card-head">
-              <h3>Recent Attendance <span class="sub">Last recorded 5 days</span></h3>
-            </div>
-            <div class="table-responsive">
-              <table class="table">
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Subject</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td>Aug 24, 2026</td>
-                    <td>Mathematics</td>
-                    <td><span class="pill p-ok">Present</span></td>
-                  </tr>
-                  <tr>
-                    <td>Aug 22, 2026</td>
-                    <td>Physics</td>
-                    <td><span class="pill p-ok">Present</span></td>
-                  </tr>
-                  <tr>
-                    <td>Aug 22, 2026</td>
-                    <td>English</td>
-                    <td><span class="pill p-warn">Late</span></td>
-                  </tr>
-                  <tr>
-                    <td>Aug 21, 2026</td>
-                    <td>Chemistry</td>
-                    <td><span class="pill p-danger">Absent</span></td>
-                  </tr>
-                  <tr>
-                    <td>Aug 20, 2026</td>
-                    <td>Computer Science</td>
-                    <td><span class="pill p-ok">Present</span></td>
-                  </tr>
-                  <tr>
-                    <td>Aug 20, 2026</td>
-                    <td>Urdu</td>
-                    <td><span class="pill p-ok">Present</span></td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-        <div class="col-xl-7">
-          <div class="card lift h-100">
-            <div class="card-head">
-              <h3>Recent Results <span class="sub">Average 82% &middot; Grade A&minus;</span></h3>
-              <a href="results.php" class="mini-link">Full Results <i class="bi bi-arrow-right"></i></a>
-            </div>
-            <div class="table-responsive">
-              <table class="table">
-                <thead>
-                  <tr>
-                    <th>Subject</th>
-                    <th>Exam</th>
-                    <th>Marks</th>
-                    <th>Total</th>
-                    <th>%</th>
-                    <th>Grade</th>
-                    <th>Result</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td class="t-strong">Mathematics</td>
-                    <td>Monthly Test</td>
-                    <td>85</td>
-                    <td>100</td>
-                    <td>85%</td>
-                    <td><span class="pill p-ok bare">A</span></td>
-                    <td><span class="pill p-ok">Pass</span></td>
-                  </tr>
-                  <tr>
-                    <td class="t-strong">Physics</td>
-                    <td>Quiz</td>
-                    <td>78</td>
-                    <td>100</td>
-                    <td>78%</td>
-                    <td><span class="pill p-teal bare">B+</span></td>
-                    <td><span class="pill p-ok">Pass</span></td>
-                  </tr>
-                  <tr>
-                    <td class="t-strong">Computer Science</td>
-                    <td>Practical</td>
-                    <td>92</td>
-                    <td>100</td>
-                    <td>92%</td>
-                    <td><span class="pill p-ok bare">A+</span></td>
-                    <td><span class="pill p-ok">Pass</span></td>
-                  </tr>
-                  <tr>
-                    <td class="t-strong">Chemistry</td>
-                    <td>Monthly Test</td>
-                    <td>74</td>
-                    <td>100</td>
-                    <td>74%</td>
-                    <td><span class="pill p-teal bare">B</span></td>
-                    <td><span class="pill p-ok">Pass</span></td>
-                  </tr>
-                  <tr>
-                    <td class="t-strong">English</td>
-                    <td>Unit Test</td>
-                    <td>88</td>
-                    <td>100</td>
-                    <td>88%</td>
-                    <td><span class="pill p-ok bare">A</span></td>
-                    <td><span class="pill p-ok">Pass</span></td>
-                  </tr>
-                  <tr>
-                    <td class="t-strong">Urdu</td>
-                    <td>Unit Test</td>
-                    <td>66</td>
-                    <td>100</td>
-                    <td>66%</td>
-                    <td><span class="pill p-warn bare">C+</span></td>
-                    <td><span class="pill p-ok">Pass</span></td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- ------------------ FEES + NOTICES ------------------ -->
-      <section class="row g-3 mt-1 rise">
-        <div class="col-xl-4">
-          <div class="card lift h-100">
-            <div class="card-head">
-              <h3>Fees Summary <span class="sub">Invoice INV-2026-0912</span></h3>
-            </div>
-            <div class="card-body">
-              <div class="total-box mb-3">
-                <small>Remaining Balance</small>
-                <strong>Rs. 8,500</strong>
-                <span style="font-size:.74rem;color:#c9e3e6">Due by 10 September 2026</span>
-              </div>
-              <div class="bar-label"><span>Total Fee &middot; Rs. 60,000</span><b>86% paid</b></div>
-              <span class="bar"><i style="width:86%;background:linear-gradient(90deg,var(--ok),#3fbf8e)"></i></span>
-              <div class="divider-soft"></div>
-              <ul class="meta-list mb-3">
-                <li><i class="bi bi-receipt"></i> Total Fee <span>Rs. 60,000</span></li>
-                <li><i class="bi bi-check2-circle"></i> Paid <span>Rs. 51,500</span></li>
-                <li><i class="bi bi-exclamation-circle"></i> Remaining <span>Rs. 8,500</span></li>
-                <li><i class="bi bi-calendar-event"></i> Due Date <span>Sep 10, 2026</span></li>
-              </ul>
-              <a href="fees.php" class="btn-solid w-100 justify-content-center"><i class="bi bi-wallet2"></i> View Fee
-                Details</a>
-            </div>
-          </div>
-        </div>
-
-        <div class="col-xl-4">
-          <div class="card lift h-100">
-            <div class="card-head">
-              <h3>Latest Notices <span class="sub">From the school administration</span></h3>
-            </div>
-            <div class="card-body tight">
-              <div class="notice-row teal">
-                <div class="notice-date"><b>24</b><small>Aug</small></div>
-                <div>
-                  <h4>Mid-Term Examination Schedule</h4>
-                  <p>The date sheet for Mid-Term Examinations 2026 has been published for all classes.</p>
-                  <span class="pill p-info bare">Exam</span>
-                  <a href="notices.php" class="mini-link ms-2">View Notice <i class="bi bi-arrow-right"></i></a>
+          <?php if (count($latest_notices) > 0): ?>
+            <?php foreach ($latest_notices as $notice): ?>
+              <div class="col-md-6 col-xl-3">
+                <div class="card notice-card h-100">
+                  <div class="card-body">
+                    <span class="badge <?php echo getCategoryBadgeClass($notice['category']); ?> mb-2">
+                      <?php echo htmlspecialchars($notice['category']); ?>
+                    </span>
+                    <h6 class="fw-bold">
+                      <?php echo htmlspecialchars($notice['title']); ?>
+                    </h6>
+                    <p class="small text-muted">
+                      <?php echo htmlspecialchars(substr($notice['details'], 0, 80)) . (strlen($notice['details']) > 80 ? '...' : ''); ?>
+                    </p>
+                    <div class="d-flex justify-content-between align-items-center">
+                      <small class="text-muted">
+                        <i class="bi bi-calendar3"></i>
+                        <?php echo date('d M Y', strtotime($notice['created_at'])); ?>
+                      </small>
+                      <a href="notices.php" class="btn btn-sm btn-primary">View</a>
+                    </div>
+                  </div>
                 </div>
               </div>
-              <div class="notice-row amber">
-                <div class="notice-date"><b>22</b><small>Aug</small></div>
-                <div>
-                  <h4>Parent Teacher Meeting</h4>
-                  <p>PTM for Class 9 to 10 will be held on Saturday, 29 August from 09:00 AM to 01:00 PM.</p>
-                  <span class="pill p-violet bare">General</span>
-                  <a href="notices.php" class="mini-link ms-2">View Notice <i class="bi bi-arrow-right"></i></a>
-                </div>
-              </div>
-              <div class="notice-row violet">
-                <div class="notice-date"><b>19</b><small>Aug</small></div>
-                <div>
-                  <h4>School Holiday Notice</h4>
-                  <p>School will remain closed on 14 August for Independence Day celebrations.</p>
-                  <span class="pill p-teal bare">Academic</span>
-                  <a href="notices.php" class="mini-link ms-2">View Notice <i class="bi bi-arrow-right"></i></a>
-                </div>
-              </div>
-              <div class="notice-row ok">
-                <div class="notice-date"><b>15</b><small>Aug</small></div>
-                <div>
-                  <h4>Annual Sports Day</h4>
-                  <p>Trials for track and field events begin next week at the main ground.</p>
-                  <span class="pill p-ok bare">Event</span>
-                  <a href="notices.php" class="mini-link ms-2">View Notice <i class="bi bi-arrow-right"></i></a>
-                </div>
+            <?php endforeach; ?>
+          <?php else: ?>
+            <div class="col-12">
+              <div class="text-center py-4 text-muted">
+                <i class="bi bi-megaphone fs-1 d-block mb-2"></i>
+                <p>No notices available</p>
               </div>
             </div>
-          </div>
+          <?php endif; ?>
         </div>
+      </main>
 
-        <div class="col-xl-4">
-          <div class="card lift h-100">
-            <div class="card-head">
-              <h3>Upcoming Events <span class="sub">Don&rsquo;t miss out</span></h3>
-            </div>
-            <div class="card-body">
-              <div class="notice-row teal">
-                <div class="notice-date"><b>29</b><small>Aug</small></div>
-                <div>
-                  <h4>Science Exhibition 2026</h4>
-                  <p>School Auditorium &middot; 10:00 AM</p><span class="pill p-ok">Registered</span>
-                </div>
-              </div>
-              <div class="notice-row info">
-                <div class="notice-date"><b>05</b><small>Sep</small></div>
-                <div>
-                  <h4>Mid-Term Examinations Begin</h4>
-                  <p>Examination Hall &middot; 09:00 AM</p><span class="pill p-info">Mandatory</span>
-                </div>
-              </div>
-              <div class="notice-row amber">
-                <div class="notice-date"><b>18</b><small>Sep</small></div>
-                <div>
-                  <h4>Annual Sports Day</h4>
-                  <p>Main Ground &middot; 08:30 AM</p><span class="pill p-warn">Invited</span>
-                </div>
-              </div>
-              <div class="divider-soft"></div>
-              <a href="events.php" class="btn-outline w-100 justify-content-center"><i
-                  class="bi bi-calendar2-heart"></i> Browse All Events</a>
-            </div>
-          </div>
-        </div>
-      </section>
-
-    </main>
-
-    <footer class="page-foot">
-      <span>&copy; 2026 Crescent Public School &middot; Student Portal</span>
-      <span class="d-flex gap-3">
-        <a href="notices.php">Help Centre</a>
-        <a href="messages.php">Contact Office</a>
-        <a href="settings.php">Privacy</a>
-      </span>
-    </footer>
+      <footer class="td-footer">© 2026 Bright Future School — Teacher Panel. All rights reserved.</footer>
+    </div>
   </div>
 
+  <script>
+    // Global search functionality
+    document.getElementById('globalSearch')?.addEventListener('keyup', function (e) {
+      if (e.key === 'Enter') {
+        const searchTerm = this.value.trim();
+        if (searchTerm) {
+          window.location.href = 'students.php?search=' + encodeURIComponent(searchTerm);
+        }
+      }
+    });
+
+    // Auto-refresh dashboard every 60 seconds
+    setTimeout(function () {
+      location.reload();
+    }, 60000);
+  </script>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 
 </html>

@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>My Students | Teacher Dashboard</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<input type="checkbox" id="tdSidebarToggle">
+<div class="td-wrapper">
+  <label for="tdSidebarToggle" class="td-overlay"></label>
+  <aside class="td-sidebar">
+    <div class="td-brand"><i class="bi bi-mortarboard-fill"></i><span>Bright Future<small>School Portal</small></span></div>
+    <div class="td-teacher-box"><div class="td-avatar">MA</div><div><h6>Mr. Ahmed</h6><p>Mathematics Teacher</p></div></div>
+    <nav class="td-nav">
+      <div class="td-nav-title">Main</div>
+      <a href="index.html"><i class="bi bi-speedometer2"></i> Dashboard</a>
+      <a href="students.html" class="active"><i class="bi bi-people"></i> My Students</a>
+      <a href="attendance.html"><i class="bi bi-calendar2-check"></i> Attendance</a>
+      <a href="subjects.html"><i class="bi bi-journal-bookmark"></i> My Subjects</a>
+      <a href="timetable.html"><i class="bi bi-clock-history"></i> My Timetable</a>
+      <div class="td-nav-title">Academics</div>
+      <a href="assignments.html"><i class="bi bi-file-earmark-text"></i> Assignments</a>
+      <a href="exams.html"><i class="bi bi-pencil-square"></i> Exams</a>
+      <a href="results.html"><i class="bi bi-bar-chart-line"></i> Results</a>
+      <div class="td-nav-title">Communication</div>
+      <a href="notices.html"><i class="bi bi-megaphone"></i> Notices</a>
+      <a href="messages.html"><i class="bi bi-chat-dots"></i> Messages</a>
+      <div class="td-nav-title">Account</div>
+      <a href="profile.html"><i class="bi bi-person-badge"></i> My Profile</a>
+      <a href="settings.html"><i class="bi bi-gear"></i> Settings</a>
+      <a href="#" class="logout"><i class="bi bi-box-arrow-right"></i> Logout</a>
+    </nav>
+  </aside>
+  <div class="td-main">
+    <header class="td-navbar">
+      <label for="tdSidebarToggle" class="td-burger"><i class="bi bi-list"></i></label>
+      <h1 class="td-page-title">My Students <small>All students assigned to your classes</small></h1>
+      <div class="td-search ms-auto"><div class="input-group">
+        <span class="input-group-text bg-white border-end-0"><i class="bi bi-search"></i></span>
+        <input type="search" class="form-control border-start-0" placeholder="Search...">
+      </div></div>
+      <a href="notices.html" class="td-icon-btn"><i class="bi bi-bell"></i><span class="td-dot"></span></a>
+      <a href="profile.html" class="d-flex align-items-center gap-2 text-dark"><span class="td-avatar">MA</span>
+        <span class="d-none d-md-block"><strong class="d-block" style="font-size:.85rem">Mr. Ahmed</strong><small class="text-muted" style="font-size:.72rem">Mathematics Teacher</small></span></a>
+    </header>
+    <main class="td-content">
+      <div class="row g-3 mb-4">
+        <div class="col-6 col-xl-3"><div class="card stat-card"><div class="stat-icon bg-grad-1"><i class="bi bi-people-fill"></i></div><div><h3>128</h3><p>Total Students</p></div></div></div>
+        <div class="col-6 col-xl-3"><div class="card stat-card"><div class="stat-icon bg-grad-2"><i class="bi bi-gender-male"></i></div><div><h3>70</h3><p>Male Students</p></div></div></div>
+        <div class="col-6 col-xl-3"><div class="card stat-card"><div class="stat-icon bg-grad-5"><i class="bi bi-gender-female"></i></div><div><h3>58</h3><p>Female Students</p></div></div></div>
+        <div class="col-6 col-xl-3"><div class="card stat-card"><div class="stat-icon bg-grad-4"><i class="bi bi-graph-up"></i></div><div><h3>94%</h3><p>Avg. Attendance</p></div></div></div>
+      </div>
+
+      <div class="card mb-4"><div class="card-body">
+        <div class="row g-3 align-items-end">
+          <div class="col-md-4"><label class="form-label">Search Student</label>
+            <input type="search" class="form-control" placeholder="Name or student ID"></div>
+          <div class="col-md-3"><label class="form-label">Class</label>
+            <select class="form-select"><option>All Classes</option><option>10-A</option><option>10-B</option><option>9-B</option><option>8-A</option></select></div>
+          <div class="col-md-3"><label class="form-label">Status</label>
+            <select class="form-select"><option>All Status</option><option>Active</option><option>Inactive</option></select></div>
+          <div class="col-md-2 d-grid"><a href="students.html" class="btn btn-primary"><i class="bi bi-funnel"></i> Filter</a></div>
+        </div>
+      </div></div>
+
+      <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <span><i class="bi bi-list-ul me-2 text-primary"></i>Student List</span>
+          <a href="#" class="btn btn-sm btn-outline-primary"><i class="bi bi-download"></i> Export</a>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-hover align-middle">
+            <thead><tr><th>Student ID</th><th>Student Name</th><th>Gender</th><th>Class</th><th>Parent</th><th>Phone</th><th>Attendance</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr><td>STD-1001</td><td>Ali Hassan</td><td>Male</td><td>10-A</td><td>Hassan Raza</td><td>0300-1234567</td><td>96%</td><td><span class="badge bg-success">Active</span></td></tr>
+              <tr><td>STD-1002</td><td>Sara Khan</td><td>Female</td><td>10-A</td><td>Imran Khan</td><td>0301-2345678</td><td>91%</td><td><span class="badge bg-success">Active</span></td></tr>
+              <tr><td>STD-1003</td><td>Bilal Ahmed</td><td>Male</td><td>9-B</td><td>Ahmed Sheikh</td><td>0302-3456789</td><td>88%</td><td><span class="badge bg-success">Active</span></td></tr>
+              <tr><td>STD-1004</td><td>Ayesha Noor</td><td>Female</td><td>9-B</td><td>Noor Ul Haq</td><td>0303-4567890</td><td>97%</td><td><span class="badge bg-success">Active</span></td></tr>
+              <tr><td>STD-1005</td><td>Usman Tariq</td><td>Male</td><td>8-A</td><td>Tariq Mehmood</td><td>0304-5678901</td><td>84%</td><td><span class="badge bg-secondary">Inactive</span></td></tr>
+              <tr><td>STD-1006</td><td>Fatima Zahra</td><td>Female</td><td>8-A</td><td>Zahid Ali</td><td>0305-6789012</td><td>99%</td><td><span class="badge bg-success">Active</span></td></tr>
+              <tr><td>STD-1007</td><td>Hamza Iqbal</td><td>Male</td><td>10-B</td><td>Iqbal Hussain</td><td>0306-7890123</td><td>78%</td><td><span class="badge bg-success">Active</span></td></tr>
+              <tr><td>STD-1008</td><td>Zainab Malik</td><td>Female</td><td>10-B</td><td>Malik Nawaz</td><td>0307-8901234</td><td>93%</td><td><span class="badge bg-success">Active</span></td></tr>
+              <tr><td>STD-1009</td><td>Ahsan Raza</td><td>Male</td><td>9-B</td><td>Raza Ali</td><td>0308-9012345</td><td>90%</td><td><span class="badge bg-success">Active</span></td></tr>
+              <tr><td>STD-1010</td><td>Mariam Shah</td><td>Female</td><td>10-A</td><td>Shah Jahan</td><td>0309-0123456</td><td>95%</td><td><span class="badge bg-success">Active</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="card-body d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <small class="text-muted">Showing 1 to 10 of 128 students</small>
+          <ul class="pagination pagination-sm mb-0">
+            <li class="page-item disabled"><span class="page-link">Previous</span></li>
+            <li class="page-item active"><a class="page-link" href="students.html">1</a></li>
+            <li class="page-item"><a class="page-link" href="students.html">2</a></li>
+            <li class="page-item"><a class="page-link" href="students.html">3</a></li>
+            <li class="page-item"><a class="page-link" href="students.html">Next</a></li>
+          </ul>
+        </div>
+      </div>
+    </main>
+    <footer class="td-footer">© 2026 Bright Future School — Teacher Panel.</footer>
+  </div>
+</div>
+</body>
+</html>
