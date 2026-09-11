@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="description" content="Exams — Crescent Public School Student Portal" />
+<title>Exams &middot; Student Portal &middot; Crescent Public School</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
+<link rel="stylesheet" href="css/style.css" />
+<link rel="icon" href="assets/images/logo.svg" type="image/svg+xml" />
+</head>
+<body>
+
+<input type="checkbox" id="navToggle" class="nav-toggle" />
+<label for="navToggle" class="nav-backdrop" aria-hidden="true"></label>
+
+<aside class="app-sidebar">
+  <div class="sidebar-head">
+    <a href="index.html" class="sidebar-brand">
+      <img src="assets/images/logo.svg" alt="Crescent Public School logo" />
+      <span class="brand-text"><strong>Crescent Public School</strong><small>Student Portal</small></span>
+    </a>
+    <label for="navToggle" class="sidebar-close" aria-label="Close navigation"><i class="bi bi-x-lg"></i></label>
+  </div>
+  <div class="student-card">
+    <span class="avatar avatar-lg">AF</span>
+    <div class="student-card-text"><strong>Ahmed Faraz</strong><small>Class 10-A &middot; STU-1024</small></div>
+    <span class="verify" title="Verified student"><i class="bi bi-patch-check-fill"></i></span>
+  </div>
+  <nav class="sidebar-nav">
+    <p class="nav-group">Overview</p>
+    <a class="nav-item" href="index.html"><i class="bi bi-columns-gap"></i><span>Dashboard</span></a>
+    <p class="nav-group">Academics</p>
+    <a class="nav-item" href="subjects.html"><i class="bi bi-journal-bookmark"></i><span>My Subjects</span><em class="nav-tag">6</em></a>
+    <a class="nav-item" href="timetable.html"><i class="bi bi-calendar-week"></i><span>My Timetable</span></a>
+    <a class="nav-item" href="attendance.html"><i class="bi bi-check2-square"></i><span>My Attendance</span></a>
+    <a class="nav-item" href="assignments.html"><i class="bi bi-journal-text"></i><span>Assignments</span><em class="nav-tag nav-tag-warn">4</em></a>
+    <a class="nav-item active" href="exams.html"><i class="bi bi-pencil-square"></i><span>Exams</span><em class="nav-tag nav-tag-info">3</em></a>
+    <a class="nav-item" href="results.html"><i class="bi bi-graph-up-arrow"></i><span>Results</span></a>
+    <p class="nav-group">Finance</p>
+    <a class="nav-item" href="fees.html"><i class="bi bi-wallet2"></i><span>Fees</span><em class="nav-tag nav-tag-danger">1</em></a>
+    <p class="nav-group">School Life</p>
+    <a class="nav-item" href="notices.html"><i class="bi bi-megaphone"></i><span>Notices</span></a>
+    <a class="nav-item" href="events.html"><i class="bi bi-calendar2-heart"></i><span>Events</span></a>
+    <a class="nav-item" href="messages.html"><i class="bi bi-envelope"></i><span>Messages</span><em class="nav-tag">3</em></a>
+    <p class="nav-group">Account</p>
+    <a class="nav-item" href="profile.html"><i class="bi bi-person-badge"></i><span>My Profile</span></a>
+    <a class="nav-item" href="settings.html"><i class="bi bi-gear"></i><span>Settings</span></a>
+  </nav>
+  <div class="sidebar-foot">
+    <a href="#" class="logout-btn"><i class="bi bi-box-arrow-right"></i><span>Logout</span></a>
+    <p class="copy">Portal v2.6 &middot; Session 2026&ndash;27</p>
+  </div>
+</aside>
+
+<div class="app-main">
+  <header class="app-topbar">
+    <label for="navToggle" class="nav-btn" aria-label="Open navigation"><i class="bi bi-list"></i></label>
+    <div class="topbar-title">
+      <h1>Exams</h1>
+      <div class="crumbs"><a href="index.html">Home</a><span>/</span>Academics<span>/</span>Exams</div>
+    </div>
+    <div class="topbar-search"><i class="bi bi-search"></i><input type="search" placeholder="Search exams or subjects&hellip;" aria-label="Search" /></div>
+    <div class="topbar-actions">
+      <div class="icon-drop">
+        <a href="notices.html" class="icon-btn" aria-label="Notifications"><i class="bi bi-bell"></i><span class="ping">5</span></a>
+        <div class="drop-panel">
+          <div class="drop-head"><strong>Notifications</strong><a href="notices.html">View all</a></div>
+          <a href="exams.html" class="drop-row"><i class="dot-ico p-info"><i class="bi bi-pencil-square"></i></i><span><p>Mid-Term timetable published</p><small>Examination Cell &middot; 2 hours ago</small></span></a>
+          <a href="assignments.html" class="drop-row"><i class="dot-ico p-warn"><i class="bi bi-journal-text"></i></i><span><p>Algebra Worksheet due in 5 days</p><small>Mr. Ahmed &middot; yesterday</small></span></a>
+        </div>
+      </div>
+      <div class="icon-drop">
+        <a href="messages.html" class="icon-btn" aria-label="Messages"><i class="bi bi-envelope"></i><span class="ping">3</span></a>
+        <div class="drop-panel">
+          <div class="drop-head"><strong>Messages</strong><a href="messages.html">Open inbox</a></div>
+          <a href="messages.html" class="drop-row"><span class="avatar info">SR</span><span><p>Ms. Sara Khan &middot; Lab report feedback</p><small>Today, 09:14 AM</small></span></a>
+        </div>
+      </div>
+      <div class="icon-drop">
+        <a href="profile.html" class="profile-chip"><span class="avatar">AF</span><span class="who"><b>Ahmed Faraz</b><small>Class 10-A</small></span><i class="bi bi-chevron-down"></i></a>
+        <div class="drop-panel">
+          <div class="drop-head"><strong>Ahmed Faraz</strong><span class="pill p-ok">Active</span></div>
+          <a href="profile.html" class="drop-row"><i class="dot-ico p-teal"><i class="bi bi-person-badge"></i></i><span><p>My Profile</p><small>STU-1024</small></span></a>
+          <a href="settings.html" class="drop-row"><i class="dot-ico p-violet"><i class="bi bi-gear"></i></i><span><p>Settings</p><small>Preferences &amp; alerts</small></span></a>
+          <a href="#" class="drop-row"><i class="dot-ico p-danger"><i class="bi bi-box-arrow-right"></i></i><span><p>Logout</p><small>End this session</small></span></a>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="app-content">
+
+    <section class="welcome rise">
+      <div class="row g-4 align-items-center">
+        <div class="col-lg-8">
+          <span class="eyebrow">Mid-Term Examinations 2026</span>
+          <h2>12 days until your first paper</h2>
+          <p>Mid-Term examinations begin on 5 September 2026. Your roll number is <b>10-A-24</b> and every paper is held in the assigned examination hall &mdash; reporting time is 08:30 AM.</p>
+          <div class="quick-chips">
+            <a href="results.html" class="chip"><i class="bi bi-graph-up-arrow"></i> Past Results</a>
+            <a href="assignments.html" class="chip"><i class="bi bi-journal-text"></i> Pending Work</a>
+            <a href="notices.html" class="chip"><i class="bi bi-megaphone"></i> Exam Notices</a>
+          </div>
+        </div>
+        <div class="col-lg-4">
+          <div class="row g-2">
+            <div class="col-6"><div class="fact"><small>Roll Number</small><strong>10-A-24</strong><span>Class 10-A</span></div></div>
+            <div class="col-6"><div class="fact"><small>First Paper</small><strong>05 Sep</strong><span>Mathematics</span></div></div>
+            <div class="col-6"><div class="fact"><small>Hall</small><strong>Hall B</strong><span>Block 2</span></div></div>
+            <div class="col-6"><div class="fact"><small>Attendance</small><strong>92%</strong><span>Eligible to sit</span></div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="row g-3 mt-4">
+      <div class="col-6 col-xl-3 rise rise-1">
+        <div class="stat-card info">
+          <div class="stat-top"><span class="stat-ico"><i class="bi bi-calendar-event"></i></span><span class="stat-trend flat">12 days</span></div>
+          <h3 class="stat-num">03</h3>
+          <p class="stat-title">Upcoming Exams</p>
+          <p class="stat-desc">Mid-Term papers this month</p>
+          <span class="stat-bar"><i style="width:50%"></i></span>
+        </div>
+      </div>
+      <div class="col-6 col-xl-3 rise rise-2">
+        <div class="stat-card teal">
+          <div class="stat-top"><span class="stat-ico"><i class="bi bi-clipboard-check"></i></span><span class="stat-trend">All passed</span></div>
+          <h3 class="stat-num">05</h3>
+          <p class="stat-title">Completed Exams</p>
+          <p class="stat-desc">Tests &amp; quizzes this term</p>
+          <span class="stat-bar"><i style="width:100%"></i></span>
+        </div>
+      </div>
+      <div class="col-6 col-xl-3 rise rise-3">
+        <div class="stat-card violet">
+          <div class="stat-top"><span class="stat-ico"><i class="bi bi-award"></i></span><span class="stat-trend">+0.2</span></div>
+          <h3 class="stat-num">3.7</h3>
+          <p class="stat-title">Current GPA</p>
+          <p class="stat-desc">Grade point average, Term 1</p>
+          <span class="stat-bar"><i style="width:88%"></i></span>
+        </div>
+      </div>
+      <div class="col-6 col-xl-3 rise rise-4">
+        <div class="stat-card amber">
+          <div class="stat-top"><span class="stat-ico"><i class="bi bi-hourglass-split"></i></span><span class="stat-trend down">Revise</span></div>
+          <h3 class="stat-num">06</h3>
+          <p class="stat-title">Chapters to Cover</p>
+          <p class="stat-desc">Syllabus for all six subjects</p>
+          <span class="stat-bar"><i style="width:45%"></i></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- UPCOMING -->
+    <section class="mt-4 rise">
+      <div class="card lift">
+        <div class="card-head">
+          <h3>Upcoming Exams <span class="sub">Mid-Term Examination 2026 &middot; Class 10-A</span></h3>
+          <span class="pill p-info"><i class="bi bi-calendar3"></i> 05 Sep &ndash; 12 Sep 2026</span>
+        </div>
+        <div class="table-responsive">
+          <table class="table">
+            <thead><tr><th>Exam</th><th>Subject</th><th>Date</th><th>Time</th><th>Room</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr>
+                <td class="t-strong">Mid-Term Examination<span class="t-sub">Paper I &middot; 3 hours</span></td>
+                <td><span class="subject-chip s-math"><i class="bi bi-calculator"></i>Mathematics</span></td>
+                <td>Sep 05, 2026</td><td>09:00 AM</td><td>Room 201</td><td><span class="pill p-info">Upcoming</span></td>
+              </tr>
+              <tr>
+                <td class="t-strong">Mid-Term Examination<span class="t-sub">Paper I &middot; 3 hours</span></td>
+                <td><span class="subject-chip s-phy"><i class="bi bi-lightning-charge"></i>Physics</span></td>
+                <td>Sep 07, 2026</td><td>09:00 AM</td><td>Room 105</td><td><span class="pill p-info">Upcoming</span></td>
+              </tr>
+              <tr>
+                <td class="t-strong">Mid-Term Examination<span class="t-sub">Theory + Practical</span></td>
+                <td><span class="subject-chip s-cs"><i class="bi bi-pc-display"></i>Computer Science</span></td>
+                <td>Sep 09, 2026</td><td>09:00 AM</td><td>Lab 2</td><td><span class="pill p-info">Upcoming</span></td>
+              </tr>
+              <tr>
+                <td class="t-strong">Chapter Test<span class="t-sub">Chapter 4 &amp; 5</span></td>
+                <td><span class="subject-chip s-chem"><i class="bi bi-droplet-half"></i>Chemistry</span></td>
+                <td>Sep 12, 2026</td><td>11:00 AM</td><td>Room 110</td><td><span class="pill p-grey">Scheduled</span></td>
+              </tr>
+              <tr>
+                <td class="t-strong">Mid-Term Examination<span class="t-sub">Paper I &middot; 3 hours</span></td>
+                <td><span class="subject-chip s-eng"><i class="bi bi-book"></i>English</span></td>
+                <td>Sep 14, 2026</td><td>09:00 AM</td><td>Room 118</td><td><span class="pill p-grey">Scheduled</span></td>
+              </tr>
+              <tr>
+                <td class="t-strong">Mid-Term Examination<span class="t-sub">Paper I &middot; 3 hours</span></td>
+                <td><span class="subject-chip s-urdu"><i class="bi bi-pen"></i>Urdu</span></td>
+                <td>Sep 16, 2026</td><td>09:00 AM</td><td>Room 204</td><td><span class="pill p-grey">Scheduled</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- COMPLETED -->
+    <section class="mt-4 rise">
+      <div class="card lift">
+        <div class="card-head">
+          <h3>Completed Exams <span class="sub">Results available on the Results page</span></h3>
+          <a href="results.html" class="mini-link">See Results <i class="bi bi-arrow-right"></i></a>
+        </div>
+        <div class="table-responsive">
+          <table class="table">
+            <thead><tr><th>Exam</th><th>Subject</th><th>Date</th><th>Time</th><th>Room</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr><td class="t-strong">Monthly Test</td><td>Mathematics</td><td>Aug 02, 2026</td><td>09:00 AM</td><td>Room 201</td><td><span class="pill p-ok">Result Declared</span></td></tr>
+              <tr><td class="t-strong">Quiz 03</td><td>Physics</td><td>Jul 28, 2026</td><td>10:30 AM</td><td>Room 105</td><td><span class="pill p-ok">Result Declared</span></td></tr>
+              <tr><td class="t-strong">Practical Assessment</td><td>Computer Science</td><td>Jul 21, 2026</td><td>11:00 AM</td><td>Lab 2</td><td><span class="pill p-ok">Result Declared</span></td></tr>
+              <tr><td class="t-strong">Monthly Test</td><td>Chemistry</td><td>Jul 15, 2026</td><td>09:00 AM</td><td>Room 110</td><td><span class="pill p-ok">Result Declared</span></td></tr>
+              <tr><td class="t-strong">Unit Test 02</td><td>English</td><td>Jul 08, 2026</td><td>09:00 AM</td><td>Room 118</td><td><span class="pill p-ok">Result Declared</span></td></tr>
+              <tr><td class="t-strong">Unit Test 02</td><td>Urdu</td><td>Jul 06, 2026</td><td>09:00 AM</td><td>Room 204</td><td><span class="pill p-warn">Under Review</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- PREPARATION + RULES -->
+    <section class="row g-3 mt-1 rise">
+      <div class="col-xl-7">
+        <div class="card lift h-100">
+          <div class="card-head"><h3>Exam Preparation <span class="sub">A 12-day revision plan</span></h3></div>
+          <div class="card-body">
+            <div class="notice-row s-math"><div class="notice-date"><b>D1</b><small>Day</small></div><div><h4>Mathematics &mdash; Algebra &amp; Quadratics</h4><p>Revise Exercise 2.1 to 2.4 and solve two past papers.</p><span class="pill p-danger">High priority</span></div></div>
+            <div class="notice-row s-phy"><div class="notice-date"><b>D3</b><small>Day</small></div><div><h4>Physics &mdash; Current Electricity</h4><p>Focus on numericals and circuit diagrams.</p><span class="pill p-warn">Medium priority</span></div></div>
+            <div class="notice-row s-cs"><div class="notice-date"><b>D5</b><small>Day</small></div><div><h4>Computer Science &mdash; Programming Basics</h4><p>Practise writing programs on paper for the practical paper.</p><span class="pill p-ok">Confident</span></div></div>
+            <div class="notice-row s-chem"><div class="notice-date"><b>D7</b><small>Day</small></div><div><h4>Chemistry &mdash; Chemical Bonding</h4><p>Complete the pending notes assignment first.</p><span class="pill p-warn">Medium priority</span></div></div>
+            <div class="notice-row s-eng"><div class="notice-date"><b>D9</b><small>Day</small></div><div><h4>English &mdash; Comprehension &amp; Writing</h4><p>Practise two unseen passages and one formal letter.</p><span class="pill p-ok">Confident</span></div></div>
+            <div class="notice-row s-urdu"><div class="notice-date"><b>D11</b><small>Day</small></div><div><h4>Urdu &mdash; Ghazal &amp; Essay Writing</h4><p>Weakest subject this term &mdash; allocate extra revision time.</p><span class="pill p-danger">High priority</span></div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-xl-5">
+        <div class="card lift h-100">
+          <div class="card-head"><h3>Examination Rules <span class="sub">Issued by the Examination Cell</span></h3></div>
+          <div class="card-body">
+            <div class="alert-soft danger mb-3"><i class="bi bi-exclamation-octagon"></i><span>Bring your <b>admit card</b> and school identity card to every paper. Entry without them is not permitted.</span></div>
+            <ul class="meta-list">
+              <li><i class="bi bi-clock"></i> Reporting time <span>08:30 AM</span></li>
+              <li><i class="bi bi-door-closed"></i> Hall entry closes <span>08:55 AM</span></li>
+              <li><i class="bi bi-phone"></i> Mobile phones <span>Not allowed</span></li>
+              <li><i class="bi bi-pen"></i> Stationery <span>Bring your own</span></li>
+              <li><i class="bi bi-calculator"></i> Calculator <span>Allowed in Maths only</span></li>
+            </ul>
+            <div class="divider-soft"></div>
+            <div class="total-box mb-3">
+              <small>Admit Card</small>
+              <strong>10-A-24</strong>
+              <span style="font-size:.74rem;color:#c9e3e6">Ahmed Faraz &middot; Hall B &middot; Seat 14</span>
+            </div>
+            <a href="notices.html" class="btn-outline w-100 justify-content-center"><i class="bi bi-file-earmark-text"></i> Download Date Sheet</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="page-foot">
+    <span>&copy; 2026 Crescent Public School &middot; Student Portal</span>
+    <span class="d-flex gap-3"><a href="notices.html">Help Centre</a><a href="messages.html">Contact Office</a><a href="settings.html">Privacy</a></span>
+  </footer>
+</div>
+
+</body>
+</html>

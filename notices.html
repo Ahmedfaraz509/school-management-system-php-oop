@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="description" content="Notices — Crescent Public School Student Portal" />
+<title>Notices &middot; Student Portal &middot; Crescent Public School</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
+<link rel="stylesheet" href="css/style.css" />
+<link rel="icon" href="assets/images/logo.svg" type="image/svg+xml" />
+</head>
+<body>
+
+<input type="checkbox" id="navToggle" class="nav-toggle" />
+<label for="navToggle" class="nav-backdrop" aria-hidden="true"></label>
+
+<aside class="app-sidebar">
+  <div class="sidebar-head">
+    <a href="index.html" class="sidebar-brand">
+      <img src="assets/images/logo.svg" alt="Crescent Public School logo" />
+      <span class="brand-text"><strong>Crescent Public School</strong><small>Student Portal</small></span>
+    </a>
+    <label for="navToggle" class="sidebar-close" aria-label="Close navigation"><i class="bi bi-x-lg"></i></label>
+  </div>
+  <div class="student-card">
+    <span class="avatar avatar-lg">AF</span>
+    <div class="student-card-text"><strong>Ahmed Faraz</strong><small>Class 10-A &middot; STU-1024</small></div>
+    <span class="verify" title="Verified student"><i class="bi bi-patch-check-fill"></i></span>
+  </div>
+  <nav class="sidebar-nav">
+    <p class="nav-group">Overview</p>
+    <a class="nav-item" href="index.html"><i class="bi bi-columns-gap"></i><span>Dashboard</span></a>
+    <p class="nav-group">Academics</p>
+    <a class="nav-item" href="subjects.html"><i class="bi bi-journal-bookmark"></i><span>My Subjects</span><em class="nav-tag">6</em></a>
+    <a class="nav-item" href="timetable.html"><i class="bi bi-calendar-week"></i><span>My Timetable</span></a>
+    <a class="nav-item" href="attendance.html"><i class="bi bi-check2-square"></i><span>My Attendance</span></a>
+    <a class="nav-item" href="assignments.html"><i class="bi bi-journal-text"></i><span>Assignments</span><em class="nav-tag nav-tag-warn">4</em></a>
+    <a class="nav-item" href="exams.html"><i class="bi bi-pencil-square"></i><span>Exams</span><em class="nav-tag nav-tag-info">3</em></a>
+    <a class="nav-item" href="results.html"><i class="bi bi-graph-up-arrow"></i><span>Results</span></a>
+    <p class="nav-group">Finance</p>
+    <a class="nav-item" href="fees.html"><i class="bi bi-wallet2"></i><span>Fees</span><em class="nav-tag nav-tag-danger">1</em></a>
+    <p class="nav-group">School Life</p>
+    <a class="nav-item active" href="notices.html"><i class="bi bi-megaphone"></i><span>Notices</span></a>
+    <a class="nav-item" href="events.html"><i class="bi bi-calendar2-heart"></i><span>Events</span></a>
+    <a class="nav-item" href="messages.html"><i class="bi bi-envelope"></i><span>Messages</span><em class="nav-tag">3</em></a>
+    <p class="nav-group">Account</p>
+    <a class="nav-item" href="profile.html"><i class="bi bi-person-badge"></i><span>My Profile</span></a>
+    <a class="nav-item" href="settings.html"><i class="bi bi-gear"></i><span>Settings</span></a>
+  </nav>
+  <div class="sidebar-foot">
+    <a href="#" class="logout-btn"><i class="bi bi-box-arrow-right"></i><span>Logout</span></a>
+    <p class="copy">Portal v2.6 &middot; Session 2026&ndash;27</p>
+  </div>
+</aside>
+
+<div class="app-main">
+  <header class="app-topbar">
+    <label for="navToggle" class="nav-btn" aria-label="Open navigation"><i class="bi bi-list"></i></label>
+    <div class="topbar-title">
+      <h1>Notices</h1>
+      <div class="crumbs"><a href="index.html">Home</a><span>/</span>School Life<span>/</span>Notices</div>
+    </div>
+    <div class="topbar-search"><i class="bi bi-search"></i><input type="search" placeholder="Search notices&hellip;" aria-label="Search" /></div>
+    <div class="topbar-actions">
+      <div class="icon-drop">
+        <a href="notices.html" class="icon-btn" aria-label="Notifications"><i class="bi bi-bell"></i><span class="ping">5</span></a>
+        <div class="drop-panel">
+          <div class="drop-head"><strong>Notifications</strong><a href="notices.html">View all</a></div>
+          <a href="notices.html" class="drop-row"><i class="dot-ico p-info"><i class="bi bi-megaphone"></i></i><span><p>New notice: Mid-Term date sheet</p><small>Examination Cell &middot; 2 hours ago</small></span></a>
+          <a href="notices.html" class="drop-row"><i class="dot-ico p-violet"><i class="bi bi-people"></i></i><span><p>PTM scheduled for 29 August</p><small>Principal Office &middot; 2 days ago</small></span></a>
+        </div>
+      </div>
+      <div class="icon-drop">
+        <a href="messages.html" class="icon-btn" aria-label="Messages"><i class="bi bi-envelope"></i><span class="ping">3</span></a>
+        <div class="drop-panel">
+          <div class="drop-head"><strong>Messages</strong><a href="messages.html">Open inbox</a></div>
+          <a href="messages.html" class="drop-row"><span class="avatar amber">CP</span><span><p>Class Teacher &middot; PTM confirmation</p><small>Yesterday, 04:02 PM</small></span></a>
+        </div>
+      </div>
+      <div class="icon-drop">
+        <a href="profile.html" class="profile-chip"><span class="avatar">AF</span><span class="who"><b>Ahmed Faraz</b><small>Class 10-A</small></span><i class="bi bi-chevron-down"></i></a>
+        <div class="drop-panel">
+          <div class="drop-head"><strong>Ahmed Faraz</strong><span class="pill p-ok">Active</span></div>
+          <a href="profile.html" class="drop-row"><i class="dot-ico p-teal"><i class="bi bi-person-badge"></i></i><span><p>My Profile</p><small>STU-1024</small></span></a>
+          <a href="settings.html" class="drop-row"><i class="dot-ico p-violet"><i class="bi bi-gear"></i></i><span><p>Settings</p><small>Preferences &amp; alerts</small></span></a>
+          <a href="#" class="drop-row"><i class="dot-ico p-danger"><i class="bi bi-box-arrow-right"></i></i><span><p>Logout</p><small>End this session</small></span></a>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="app-content">
+
+    <section class="welcome rise">
+      <div class="row g-4 align-items-center">
+        <div class="col-lg-8">
+          <span class="eyebrow">Notice Board &middot; Updated daily</span>
+          <h2>8 active notices from the school</h2>
+          <p>Official announcements from the Principal Office, Examination Cell and Accounts. Notices marked <b>Important</b> require action from students and parents.</p>
+          <div class="quick-chips">
+            <a href="events.html" class="chip"><i class="bi bi-calendar2-heart"></i> Upcoming Events</a>
+            <a href="exams.html" class="chip"><i class="bi bi-pencil-square"></i> Exam Notices</a>
+            <a href="fees.html" class="chip"><i class="bi bi-wallet2"></i> Fee Notices</a>
+          </div>
+        </div>
+        <div class="col-lg-4">
+          <div class="row g-2">
+            <div class="col-6"><div class="fact"><small>Active Notices</small><strong>08</strong><span>This month</span></div></div>
+            <div class="col-6"><div class="fact"><small>Important</small><strong>03</strong><span>Action needed</span></div></div>
+            <div class="col-6"><div class="fact"><small>Categories</small><strong>04</strong><span>Academic to Event</span></div></div>
+            <div class="col-6"><div class="fact"><small>Latest</small><strong>2 hrs</strong><span>Date sheet</span></div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="row g-3 mt-4">
+      <div class="col-md-6 col-xl-3 rise rise-1">
+        <div class="stat-card teal">
+          <div class="stat-top"><span class="stat-ico"><i class="bi bi-mortarboard"></i></span><span class="stat-trend flat">3 new</span></div>
+          <h3 class="stat-num">03</h3>
+          <p class="stat-title">Academic</p>
+          <p class="stat-desc">Syllabus, timetable &amp; classes</p>
+          <span class="stat-bar"><i style="width:38%"></i></span>
+        </div>
+      </div>
+      <div class="col-md-6 col-xl-3 rise rise-2">
+        <div class="stat-card info">
+          <div class="stat-top"><span class="stat-ico"><i class="bi bi-pencil-square"></i></span><span class="stat-trend down">Action</span></div>
+          <h3 class="stat-num">02</h3>
+          <p class="stat-title">Exam</p>
+          <p class="stat-desc">Date sheets &amp; instructions</p>
+          <span class="stat-bar"><i style="width:25%"></i></span>
+        </div>
+      </div>
+      <div class="col-md-6 col-xl-3 rise rise-3">
+        <div class="stat-card ok">
+          <div class="stat-top"><span class="stat-ico"><i class="bi bi-calendar2-heart"></i></span><span class="stat-trend">2 upcoming</span></div>
+          <h3 class="stat-num">02</h3>
+          <p class="stat-title">Event</p>
+          <p class="stat-desc">Functions &amp; competitions</p>
+          <span class="stat-bar"><i style="width:25%"></i></span>
+        </div>
+      </div>
+      <div class="col-md-6 col-xl-3 rise rise-4">
+        <div class="stat-card amber">
+          <div class="stat-top"><span class="stat-ico"><i class="bi bi-info-circle"></i></span><span class="stat-trend flat">General</span></div>
+          <h3 class="stat-num">01</h3>
+          <p class="stat-title">General</p>
+          <p class="stat-desc">Holidays &amp; circulars</p>
+          <span class="stat-bar"><i style="width:12%"></i></span>
+        </div>
+      </div>
+    </section>
+
+    <section class="row g-3 mt-1 rise">
+      <div class="col-xl-8">
+        <div class="row g-3">
+
+          <div class="col-12">
+            <div class="card lift h-100">
+              <div class="card-body">
+                <div class="d-flex flex-wrap justify-content-between gap-2 mb-2">
+                  <span class="pill p-info"><i class="bi bi-pencil-square"></i> Exam</span>
+                  <span style="font-size:.72rem;color:var(--muted)"><i class="bi bi-clock"></i> Posted 24 Aug 2026 &middot; 08:12 AM</span>
+                </div>
+                <h3 style="font-size:1.1rem">Mid-Term Examination Schedule Published</h3>
+                <p style="font-size:.84rem;color:var(--muted);line-height:1.6">The date sheet for the Mid-Term Examinations 2026 has been released for Classes 6 to 10. Papers will be conducted from 5 September to 16 September 2026 in the assigned examination halls. Admit cards can be collected from the class teacher from 1 September. Students must report at 08:30 AM with their school identity card.</p>
+                <div class="tag-list mb-3">
+                  <span class="pill p-grey bare">Class 10-A</span>
+                  <span class="pill p-grey bare">Examination Cell</span>
+                  <span class="pill p-danger">Important</span>
+                </div>
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                  <span style="font-size:.75rem;color:var(--muted)"><i class="bi bi-person-badge me-1"></i>Posted by Examination Cell</span>
+                  <span class="d-flex gap-2">
+                    <a href="exams.html" class="mini-link">View Date Sheet <i class="bi bi-arrow-right"></i></a>
+                    <a href="notices.html" class="mini-link ghost">Download PDF</a>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-md-6">
+            <div class="card lift h-100">
+              <div class="card-body">
+                <span class="pill p-violet"><i class="bi bi-people"></i> General</span>
+                <h3 class="mt-2" style="font-size:1rem">Parent Teacher Meeting</h3>
+                <p style="font-size:.82rem;color:var(--muted);line-height:1.55">PTM for Classes 9 and 10 will be held on Saturday, 29 August 2026 from 09:00 AM to 01:00 PM in the respective classrooms. Attendance of at least one parent is mandatory.</p>
+                <span class="pill p-danger mb-2">Important</span>
+                <div class="divider-soft"></div>
+                <div class="d-flex justify-content-between align-items-center">
+                  <span style="font-size:.72rem;color:var(--muted)">22 Aug 2026 &middot; Principal Office</span>
+                  <a href="notices.html" class="mini-link">View Notice <i class="bi bi-arrow-right"></i></a>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-md-6">
+            <div class="card lift h-100">
+              <div class="card-body">
+                <span class="pill p-teal"><i class="bi bi-mortarboard"></i> Academic</span>
+                <h3 class="mt-2" style="font-size:1rem">School Holiday Notice</h3>
+                <p style="font-size:.82rem;color:var(--muted);line-height:1.55">The school will remain closed on 14 August 2026 on account of Independence Day. Regular classes resume on Friday, 15 August 2026 at 08:00 AM. No homework will be assigned for the holiday period.</p>
+                <span class="pill p-grey mb-2">Closed</span>
+                <div class="divider-soft"></div>
+                <div class="d-flex justify-content-between align-items-center">
+                  <span style="font-size:.72rem;color:var(--muted)">19 Aug 2026 &middot; Admin Office</span>
+                  <a href="notices.html" class="mini-link">View Notice <i class="bi bi-arrow-right"></i></a>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-md-6">
+            <div class="card lift h-100">
+              <div class="card-body">
+                <span class="pill p-ok"><i class="bi bi-calendar2-heart"></i> Event</span>
+                <h3 class="mt-2" style="font-size:1rem">Annual Sports Day</h3>
+                <p style="font-size:.82rem;color:var(--muted);line-height:1.55">Trials for track and field events begin next week at the main ground. Interested students should register with the sports teacher before 30 August 2026.</p>
+                <span class="pill p-warn mb-2">Registration Open</span>
+                <div class="divider-soft"></div>
+                <div class="d-flex justify-content-between align-items-center">
+                  <span style="font-size:.72rem;color:var(--muted)">15 Aug 2026 &middot; Sports Department</span>
+                  <a href="events.html" class="mini-link">View Notice <i class="bi bi-arrow-right"></i></a>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-md-6">
+            <div class="card lift h-100">
+              <div class="card-body">
+                <span class="pill p-teal"><i class="bi bi-mortarboard"></i> Academic</span>
+                <h3 class="mt-2" style="font-size:1rem">Revised Syllabus for Term 1</h3>
+                <p style="font-size:.82rem;color:var(--muted);line-height:1.55">A revised syllabus for Mathematics and Physics has been uploaded for Class 10. Students are advised to collect the updated course outline from their subject teachers.</p>
+                <span class="pill p-ok mb-2">Published</span>
+                <div class="divider-soft"></div>
+                <div class="d-flex justify-content-between align-items-center">
+                  <span style="font-size:.72rem;color:var(--muted)">12 Aug 2026 &middot; Academic Head</span>
+                  <a href="subjects.html" class="mini-link">View Notice <i class="bi bi-arrow-right"></i></a>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-md-6">
+            <div class="card lift h-100">
+              <div class="card-body">
+                <span class="pill p-info"><i class="bi bi-pencil-square"></i> Exam</span>
+                <h3 class="mt-2" style="font-size:1rem">Practical Examination Guidelines</h3>
+                <p style="font-size:.82rem;color:var(--muted);line-height:1.55">Practical examinations for Physics, Chemistry and Computer Science will be conducted in the second week of September. Lab coats must be worn in the laboratory.</p>
+                <span class="pill p-grey mb-2">Scheduled</span>
+                <div class="divider-soft"></div>
+                <div class="d-flex justify-content-between align-items-center">
+                  <span style="font-size:.72rem;color:var(--muted)">10 Aug 2026 &middot; Examination Cell</span>
+                  <a href="exams.html" class="mini-link">View Notice <i class="bi bi-arrow-right"></i></a>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-md-6">
+            <div class="card lift h-100">
+              <div class="card-body">
+                <span class="pill p-violet"><i class="bi bi-info-circle"></i> General</span>
+                <h3 class="mt-2" style="font-size:1rem">Fee Submission Reminder</h3>
+                <p style="font-size:.82rem;color:var(--muted);line-height:1.55">The September instalment of Rs. 8,500 is due by 10 September 2026. A late fee of Rs. 200 per week applies after the due date.</p>
+                <span class="pill p-danger mb-2">Important</span>
+                <div class="divider-soft"></div>
+                <div class="d-flex justify-content-between align-items-center">
+                  <span style="font-size:.72rem;color:var(--muted)">08 Aug 2026 &middot; Accounts Office</span>
+                  <a href="fees.html" class="mini-link">View Notice <i class="bi bi-arrow-right"></i></a>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-md-6">
+            <div class="card lift h-100">
+              <div class="card-body">
+                <span class="pill p-teal"><i class="bi bi-mortarboard"></i> Academic</span>
+                <h3 class="mt-2" style="font-size:1rem">Library Book Return Reminder</h3>
+                <p style="font-size:.82rem;color:var(--muted);line-height:1.55">All borrowed library books must be returned before the Mid-Term examinations. Overdue books will attract a fine of Rs. 20 per week.</p>
+                <span class="pill p-ok mb-2">Published</span>
+                <div class="divider-soft"></div>
+                <div class="d-flex justify-content-between align-items-center">
+                  <span style="font-size:.72rem;color:var(--muted)">05 Aug 2026 &middot; Library</span>
+                  <a href="notices.html" class="mini-link">View Notice <i class="bi bi-arrow-right"></i></a>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <div class="col-xl-4">
+        <div class="card lift mb-3">
+          <div class="card-head"><h3>Filter by Category <span class="sub">Notice board</span></h3></div>
+          <div class="card-body">
+            <ul class="meta-list">
+              <li><i class="bi bi-mortarboard"></i> Academic <span>3</span></li>
+              <li><i class="bi bi-pencil-square"></i> Exam <span>2</span></li>
+              <li><i class="bi bi-calendar2-heart"></i> Event <span>2</span></li>
+              <li><i class="bi bi-info-circle"></i> General <span>2</span></li>
+            </ul>
+            <div class="divider-soft"></div>
+            <div class="d-flex flex-wrap gap-2">
+              <a href="notices.html" class="mini-link">All Notices</a>
+              <a href="notices.html" class="mini-link amber">Important</a>
+              <a href="notices.html" class="mini-link ghost">Archived</a>
+            </div>
+          </div>
+        </div>
+
+        <div class="card lift mb-3">
+          <div class="card-head"><h3>Notice Archive <span class="sub">Earlier this session</span></h3></div>
+          <div class="card-body tight">
+            <div class="notice-row teal"><div class="notice-date"><b>28</b><small>Jul</small></div><div><h4>Term 1 Class Routine</h4><p>Academic &middot; Academic Head</p></div></div>
+            <div class="notice-row amber"><div class="notice-date"><b>14</b><small>Jul</small></div><div><h4>Summer Vacation Circular</h4><p>General &middot; Admin Office</p></div></div>
+            <div class="notice-row info"><div class="notice-date"><b>02</b><small>Jul</small></div><div><h4>Monthly Test Schedule</h4><p>Exam &middot; Examination Cell</p></div></div>
+            <div class="notice-row violet"><div class="notice-date"><b>18</b><small>Jun</small></div><div><h4>Inter-House Debate</h4><p>Event &middot; Literary Society</p></div></div>
+          </div>
+        </div>
+
+        <div class="card lift">
+          <div class="card-head"><h3>Need Clarification? <span class="sub">Talk to the office</span></h3></div>
+          <div class="card-body">
+            <p style="font-size:.82rem;color:var(--muted);line-height:1.6">Questions about any notice can be sent directly to the concerned department through the student messaging system.</p>
+            <a href="messages.html" class="btn-solid w-100 justify-content-center"><i class="bi bi-envelope"></i> Message the Office</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="page-foot">
+    <span>&copy; 2026 Crescent Public School &middot; Student Portal</span>
+    <span class="d-flex gap-3"><a href="notices.html">Help Centre</a><a href="messages.html">Contact Office</a><a href="settings.html">Privacy</a></span>
+  </footer>
+</div>
+
+</body>
+</html>

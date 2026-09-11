@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description"
+    content="Crescent Public School — Student Portal Dashboard for Ahmed Faraz (Class 10-A, STU-1024)" />
+  <title>Dashboard &middot; Student Portal &middot; Crescent Public School</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="icon" href="assets/images/logo.svg" type="image/svg+xml" />
+</head>
+
+<body>
+
+  <input type="checkbox" id="navToggle" class="nav-toggle" />
+  <label for="navToggle" class="nav-backdrop" aria-hidden="true"></label>
+
+  <!-- ================================ SIDEBAR ================================ -->
+  <aside class="app-sidebar">
+    <div class="sidebar-head">
+      <a href="index.php" class="sidebar-brand">
+        <img src="assets/images/logo.svg" alt="Crescent Public School logo" />
+        <span class="brand-text">
+          <strong>Crescent Public School</strong>
+          <small>Student Portal</small>
+        </span>
+      </a>
+      <label for="navToggle" class="sidebar-close" aria-label="Close navigation"><i class="bi bi-x-lg"></i></label>
+    </div>
+
+    <div class="student-card">
+      <span class="avatar avatar-lg">AF</span>
+      <div class="student-card-text">
+        <strong>Ahmed Faraz</strong>
+        <small>Class 10-A &middot; STU-1024</small>
+      </div>
+      <span class="verify" title="Verified student"><i class="bi bi-patch-check-fill"></i></span>
+    </div>
+
+    <nav class="sidebar-nav">
+      <p class="nav-group">Overview</p>
+      <a class="nav-item active" href="index.php"><i class="bi bi-columns-gap"></i><span>Dashboard</span></a>
+
+      <p class="nav-group">Academics</p>
+      <a class="nav-item" href="subjects.php"><i class="bi bi-journal-bookmark"></i><span>My Subjects</span><em
+          class="nav-tag">6</em></a>
+      <a class="nav-item" href="timetable.php"><i class="bi bi-calendar-week"></i><span>My Timetable</span></a>
+      <a class="nav-item" href="attendance.php"><i class="bi bi-check2-square"></i><span>My Attendance</span></a>
+      <a class="nav-item" href="assignments.php"><i class="bi bi-journal-text"></i><span>Assignments</span><em
+          class="nav-tag nav-tag-warn">4</em></a>
+      <a class="nav-item" href="exams.php"><i class="bi bi-pencil-square"></i><span>Exams</span><em
+          class="nav-tag nav-tag-info">3</em></a>
+      <a class="nav-item" href="results.php"><i class="bi bi-graph-up-arrow"></i><span>Results</span></a>
+
+      <p class="nav-group">Finance</p>
+      <a class="nav-item" href="fees.php"><i class="bi bi-wallet2"></i><span>Fees</span><em
+          class="nav-tag nav-tag-danger">1</em></a>
+
+      <p class="nav-group">School Life</p>
+      <a class="nav-item" href="notices.php"><i class="bi bi-megaphone"></i><span>Notices</span></a>
+      <a class="nav-item" href="events.php"><i class="bi bi-calendar2-heart"></i><span>Events</span></a>
+      <a class="nav-item" href="messages.php"><i class="bi bi-envelope"></i><span>Messages</span><em
+          class="nav-tag">3</em></a>
+
+      <p class="nav-group">Account</p>
+      <a class="nav-item" href="profile.php"><i class="bi bi-person-badge"></i><span>My Profile</span></a>
+      <a class="nav-item" href="settings.php"><i class="bi bi-gear"></i><span>Settings</span></a>
+    </nav>
+
+    <div class="sidebar-foot">
+      <a href="#" class="logout-btn"><i class="bi bi-box-arrow-right"></i><span>Logout</span></a>
+      <p class="copy">Portal v2.6 &middot; Session 2026&ndash;27</p>
+    </div>
+  </aside>
+
+  <!-- ================================= MAIN ================================= -->
+  <div class="app-main">
+
+    <header class="app-topbar">
+      <label for="navToggle" class="nav-btn" aria-label="Open navigation"><i class="bi bi-list"></i></label>
+      <div class="topbar-title">
+        <h1>Dashboard</h1>
+        <div class="crumbs"><a href="index.php">Home</a><span>/</span>Dashboard</div>
+      </div>
+
+      <div class="topbar-search">
+        <i class="bi bi-search"></i>
+        <input type="search" placeholder="Search subjects, assignments, notices&hellip;" aria-label="Search" />
+      </div>
+
+      <div class="topbar-actions">
+        <div class="icon-drop">
+          <a href="notices.php" class="icon-btn" aria-label="Notifications"><i class="bi bi-bell"></i><span
+              class="ping">5</span></a>
+          <div class="drop-panel">
+            <div class="drop-head"><strong>Notifications</strong><a href="notices.php">View all</a></div>
+            <a href="exams.php" class="drop-row"><i class="dot-ico p-info"><i class="bi bi-pencil-square"></i></i><span>
+                <p>Mid-Term timetable published</p><small>Examination Cell &middot; 2 hours ago</small>
+              </span></a>
+            <a href="assignments.php" class="drop-row"><i class="dot-ico p-warn"><i
+                  class="bi bi-journal-text"></i></i><span>
+                <p>Algebra Worksheet due in 5 days</p><small>Mr. Ahmed &middot; yesterday</small>
+              </span></a>
+            <a href="results.php" class="drop-row"><i class="dot-ico p-ok"><i
+                  class="bi bi-graph-up-arrow"></i></i><span>
+                <p>Physics quiz result uploaded</p><small>Ms. Sara &middot; 2 days ago</small>
+              </span></a>
+            <a href="fees.php" class="drop-row"><i class="dot-ico p-danger"><i class="bi bi-wallet2"></i></i><span>
+                <p>Fee instalment due on Sep 10</p><small>Accounts Office &middot; 3 days ago</small>
+              </span></a>
+          </div>
+        </div>
+
+        <div class="icon-drop">
+          <a href="messages.php" class="icon-btn" aria-label="Messages"><i class="bi bi-envelope"></i><span
+              class="ping">3</span></a>
+          <div class="drop-panel">
+            <div class="drop-head"><strong>Messages</strong><a href="messages.php">Open inbox</a></div>
+            <a href="messages.php" class="drop-row"><span class="avatar info">SR</span><span>
+                <p>Ms. Sara Khan &middot; Lab report feedback</p><small>Today, 09:14 AM</small>
+              </span></a>
+            <a href="messages.php" class="drop-row"><span class="avatar amber">CP</span><span>
+                <p>Class Teacher &middot; PTM confirmation</p><small>Yesterday, 04:02 PM</small>
+              </span></a>
+            <a href="messages.php" class="drop-row"><span class="avatar violet">AD</span><span>
+                <p>Admin Office &middot; Sports day consent</p><small>Aug 24, 2026</small>
+              </span></a>
+          </div>
+        </div>
+
+        <div class="icon-drop">
+          <a href="profile.php" class="profile-chip">
+            <span class="avatar">AF</span>
+            <span class="who"><b>Ahmed Faraz</b><small>Class 10-A</small></span>
+            <i class="bi bi-chevron-down"></i>
+          </a>
+          <div class="drop-panel">
+            <div class="drop-head"><strong>Ahmed Faraz</strong><span class="pill p-ok">Active</span></div>
+            <a href="profile.php" class="drop-row"><i class="dot-ico p-teal"><i
+                  class="bi bi-person-badge"></i></i><span>
+                <p>My Profile</p><small>STU-1024</small>
+              </span></a>
+            <a href="results.php" class="drop-row"><i class="dot-ico p-ok"><i class="bi bi-award"></i></i><span>
+                <p>My Results</p><small>GPA 3.7</small>
+              </span></a>
+            <a href="settings.php" class="drop-row"><i class="dot-ico p-violet"><i class="bi bi-gear"></i></i><span>
+                <p>Settings</p><small>Preferences &amp; alerts</small>
+              </span></a>
+            <a href="#" class="drop-row"><i class="dot-ico p-danger"><i class="bi bi-box-arrow-right"></i></i><span>
+                <p>Logout</p><small>End this session</small>
+              </span></a>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="app-content">
+
+      <!-- ------------------------------ WELCOME ------------------------------ -->
+      <section class="welcome rise">
+        <div class="row g-4 align-items-center">
+          <div class="col-lg-7">
+            <span class="eyebrow">Monday &middot; 24 August 2026 &middot; Term 1, Week 09</span>
+            <h2>Good morning, Ahmed. You have 3 classes left today.</h2>
+            <p>Your Physics lab report is due in 8 days, the Mid-Term examination schedule has just been published, and
+              one fee instalment is pending before 10 September.</p>
+            <div class="quick-chips">
+              <a href="timetable.php" class="chip"><i class="bi bi-calendar-week"></i> My Timetable</a>
+              <a href="assignments.php" class="chip"><i class="bi bi-journal-text"></i> 4 Pending Tasks</a>
+              <a href="exams.php" class="chip"><i class="bi bi-pencil-square"></i> Exam Schedule</a>
+              <a href="fees.php" class="chip"><i class="bi bi-wallet2"></i> Pay Fees</a>
+              <a href="messages.php" class="chip"><i class="bi bi-envelope"></i> 3 Unread</a>
+            </div>
+          </div>
+          <div class="col-lg-5">
+            <div class="row g-2">
+              <div class="col-6">
+                <div class="fact"><small>Next Class</small><strong>Physics &middot; 09:00</strong><span>Room 105
+                    &middot; Ms. Sara</span></div>
+              </div>
+              <div class="col-6">
+                <div class="fact"><small>Attendance</small><strong>92%</strong><span>2 missed this term</span></div>
+              </div>
+              <div class="col-6">
+                <div class="fact"><small>Current GPA</small><strong>3.7 / 4.0</strong><span>Top 8% of class</span></div>
+              </div>
+              <div class="col-6">
+                <div class="fact"><small>Fees Due</small><strong>Rs. 8,500</strong><span>By 10 Sep 2026</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ------------------------------ STATISTICS ------------------------------ -->
+      <section class="mt-4">
+        <div class="row g-3">
+          <div class="col-6 col-md-4 col-xl-2 rise rise-1">
+            <div class="stat-card teal">
+              <div class="stat-top"><span class="stat-ico"><i class="bi bi-journal-bookmark"></i></span><span
+                  class="stat-trend flat">Term 1</span></div>
+              <h3 class="stat-num">06</h3>
+              <p class="stat-title">My Subjects</p>
+              <p class="stat-desc">All core subjects of Class 10-A</p>
+              <span class="stat-bar"><i style="width:100%"></i></span>
+            </div>
+          </div>
+          <div class="col-6 col-md-4 col-xl-2 rise rise-2">
+            <div class="stat-card ok">
+              <div class="stat-top"><span class="stat-ico"><i class="bi bi-check2-circle"></i></span><span
+                  class="stat-trend">+2.1%</span></div>
+              <h3 class="stat-num">92<small>%</small></h3>
+              <p class="stat-title">Attendance</p>
+              <p class="stat-desc">110 of 120 classes attended</p>
+              <span class="stat-bar"><i style="width:92%"></i></span>
+            </div>
+          </div>
+          <div class="col-6 col-md-4 col-xl-2 rise rise-3">
+            <div class="stat-card amber">
+              <div class="stat-top"><span class="stat-ico"><i class="bi bi-journal-text"></i></span><span
+                  class="stat-trend down">1 overdue</span></div>
+              <h3 class="stat-num">04</h3>
+              <p class="stat-title">Pending Assignments</p>
+              <p class="stat-desc">Next due: Algebra Worksheet</p>
+              <span class="stat-bar"><i style="width:40%"></i></span>
+            </div>
+          </div>
+          <div class="col-6 col-md-4 col-xl-2 rise rise-4">
+            <div class="stat-card info">
+              <div class="stat-top"><span class="stat-ico"><i class="bi bi-pencil-square"></i></span><span
+                  class="stat-trend flat">12 days left</span></div>
+              <h3 class="stat-num">03</h3>
+              <p class="stat-title">Upcoming Exams</p>
+              <p class="stat-desc">Mid-Terms start 05 Sep 2026</p>
+              <span class="stat-bar"><i style="width:55%"></i></span>
+            </div>
+          </div>
+          <div class="col-6 col-md-4 col-xl-2 rise rise-5">
+            <div class="stat-card violet">
+              <div class="stat-top"><span class="stat-ico"><i class="bi bi-graph-up-arrow"></i></span><span
+                  class="stat-trend">+0.2</span></div>
+              <h3 class="stat-num">3.7</h3>
+              <p class="stat-title">Current GPA</p>
+              <p class="stat-desc">Grade A average this term</p>
+              <span class="stat-bar"><i style="width:88%"></i></span>
+            </div>
+          </div>
+          <div class="col-6 col-md-4 col-xl-2 rise rise-6">
+            <div class="stat-card danger">
+              <div class="stat-top"><span class="stat-ico"><i class="bi bi-wallet2"></i></span><span
+                  class="stat-trend down">Sep 10</span></div>
+              <h3 class="stat-num">Rs.<small>8,500</small></h3>
+              <p class="stat-title">Fees Due</p>
+              <p class="stat-desc">September instalment pending</p>
+              <span class="stat-bar"><i style="width:14%"></i></span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ------------------ TODAY'S TIMETABLE + ATTENDANCE ------------------ -->
+      <section class="row g-3 mt-1">
+        <div class="col-xl-8 rise">
+          <div class="card lift h-100">
+            <div class="card-head">
+              <div>
+                <h3>Today&rsquo;s Timetable <span class="sub">Monday, 24 August 2026 &middot; 6 periods</span></h3>
+              </div>
+              <a href="timetable.php" class="mini-link">Full Week <i class="bi bi-arrow-right"></i></a>
+            </div>
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Time</th>
+                    <th>Subject</th>
+                    <th>Teacher</th>
+                    <th>Room</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="t-strong">08:00 AM &ndash; 09:00 AM</td>
+                    <td><span class="subject-chip s-math"><i class="bi bi-calculator"></i>Mathematics</span></td>
+                    <td>Mr. Ahmed</td>
+                    <td>Room 201</td>
+                    <td><span class="pill p-grey">Completed</span></td>
+                  </tr>
+                  <tr>
+                    <td class="t-strong">09:00 AM &ndash; 10:00 AM</td>
+                    <td><span class="subject-chip s-phy"><i class="bi bi-lightning-charge"></i>Physics</span></td>
+                    <td>Ms. Sara</td>
+                    <td>Room 105</td>
+                    <td><span class="pill p-info">Ongoing</span></td>
+                  </tr>
+                  <tr>
+                    <td class="t-strong">10:00 AM &ndash; 10:30 AM</td>
+                    <td colspan="4" class="text-muted fst-italic">Morning break &middot; School courtyard</td>
+                  </tr>
+                  <tr>
+                    <td class="t-strong">10:30 AM &ndash; 11:30 AM</td>
+                    <td><span class="subject-chip s-cs"><i class="bi bi-pc-display"></i>Computer Science</span></td>
+                    <td>Mr. Ali</td>
+                    <td>Lab 2</td>
+                    <td><span class="pill p-teal">Upcoming</span></td>
+                  </tr>
+                  <tr>
+                    <td class="t-strong">11:30 AM &ndash; 12:30 PM</td>
+                    <td><span class="subject-chip s-eng"><i class="bi bi-book"></i>English</span></td>
+                    <td>Ms. Hina</td>
+                    <td>Room 118</td>
+                    <td><span class="pill p-teal">Upcoming</span></td>
+                  </tr>
+                  <tr>
+                    <td class="t-strong">12:30 PM &ndash; 01:15 PM</td>
+                    <td colspan="4" class="text-muted fst-italic">Lunch &amp; prayer break</td>
+                  </tr>
+                  <tr>
+                    <td class="t-strong">01:15 PM &ndash; 02:15 PM</td>
+                    <td><span class="subject-chip s-urdu"><i class="bi bi-pen"></i>Urdu</span></td>
+                    <td>Mr. Tariq</td>
+                    <td>Room 204</td>
+                    <td><span class="pill p-teal">Upcoming</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-xl-4 rise rise-2">
+          <div class="card lift h-100">
+            <div class="card-head">
+              <h3>Attendance Summary <span class="sub">Session 2026&ndash;27, Term 1</span></h3>
+            </div>
+            <div class="card-body text-center">
+              <div class="donut">
+                <div class="donut-mid"><b>92%</b><small>Present</small></div>
+              </div>
+              <div class="legend">
+                <div class="legend-row"><i class="dot" style="background:var(--ok)"></i><span>Present &middot; 110
+                    classes</span><b>92%</b></div>
+                <div class="legend-row"><i class="dot" style="background:var(--danger)"></i><span>Absent &middot; 6
+                    classes</span><b>5%</b></div>
+                <div class="legend-row"><i class="dot" style="background:var(--accent)"></i><span>Late &middot; 4
+                    classes</span><b>3%</b></div>
+              </div>
+              <div class="divider-soft"></div>
+              <a href="attendance.php" class="btn-solid w-100 justify-content-center"><i class="bi bi-bar-chart"></i>
+                Detailed Report</a>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ------------------------------ MY SUBJECTS ------------------------------ -->
+      <section class="mt-4 rise">
+        <div class="section-head">
+          <div>
+            <span class="eyebrow">Enrolment</span>
+            <h2>My Subjects</h2>
+            <p>Six core subjects for Class 10-A this session.</p>
+          </div>
+          <a href="subjects.php" class="mini-link">All Subjects <i class="bi bi-arrow-right"></i></a>
+        </div>
+        <div class="row g-3">
+          <div class="col-md-6 col-xl-4">
+            <div class="subject-card s-math">
+              <span class="ribbon"></span><span class="code">MTH-101</span>
+              <span class="subject-ico"><i class="bi bi-calculator"></i></span>
+              <h3>Mathematics</h3>
+              <p class="teacher"><i class="bi bi-person"></i> Mr. Ahmed Raza</p>
+              <ul class="meta-list">
+                <li><i class="bi bi-mortarboard"></i> Class <span>10-A</span></li>
+                <li><i class="bi bi-people"></i> Students <span>32</span></li>
+                <li><i class="bi bi-door-open"></i> Room <span>201</span></li>
+              </ul>
+              <a href="subjects.php" class="mini-link">View Subject <i class="bi bi-arrow-right"></i></a>
+            </div>
+          </div>
+          <div class="col-md-6 col-xl-4">
+            <div class="subject-card s-phy">
+              <span class="ribbon"></span><span class="code">PHY-102</span>
+              <span class="subject-ico"><i class="bi bi-lightning-charge"></i></span>
+              <h3>Physics</h3>
+              <p class="teacher"><i class="bi bi-person"></i> Ms. Sara Khan</p>
+              <ul class="meta-list">
+                <li><i class="bi bi-mortarboard"></i> Class <span>10-A</span></li>
+                <li><i class="bi bi-people"></i> Students <span>30</span></li>
+                <li><i class="bi bi-door-open"></i> Room <span>105</span></li>
+              </ul>
+              <a href="subjects.php" class="mini-link">View Subject <i class="bi bi-arrow-right"></i></a>
+            </div>
+          </div>
+          <div class="col-md-6 col-xl-4">
+            <div class="subject-card s-cs">
+              <span class="ribbon"></span><span class="code">CSC-104</span>
+              <span class="subject-ico"><i class="bi bi-pc-display"></i></span>
+              <h3>Computer Science</h3>
+              <p class="teacher"><i class="bi bi-person"></i> Mr. Ali Hassan</p>
+              <ul class="meta-list">
+                <li><i class="bi bi-mortarboard"></i> Class <span>10-A</span></li>
+                <li><i class="bi bi-people"></i> Students <span>28</span></li>
+                <li><i class="bi bi-door-open"></i> Room <span>Lab 2</span></li>
+              </ul>
+              <a href="subjects.php" class="mini-link">View Subject <i class="bi bi-arrow-right"></i></a>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ------------------ ASSIGNMENTS + EXAMS ------------------ -->
+      <section class="row g-3 mt-1 rise">
+        <div class="col-xl-7">
+          <div class="card lift h-100">
+            <div class="card-head">
+              <h3>Upcoming Assignments <span class="sub">4 pending &middot; 6 submitted this term</span></h3>
+              <a href="assignments.php" class="mini-link amber">View All <i class="bi bi-arrow-right"></i></a>
+            </div>
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Assignment</th>
+                    <th>Subject</th>
+                    <th>Assigned</th>
+                    <th>Due Date</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="t-strong">Algebra Worksheet</td>
+                    <td>Mathematics</td>
+                    <td>Aug 25, 2026</td>
+                    <td>Aug 30, 2026</td>
+                    <td><span class="pill p-warn">Pending</span></td>
+                  </tr>
+                  <tr>
+                    <td class="t-strong">Physics Lab Report</td>
+                    <td>Physics</td>
+                    <td>Aug 26, 2026</td>
+                    <td>Sep 01, 2026</td>
+                    <td><span class="pill p-ok">Submitted</span></td>
+                  </tr>
+                  <tr>
+                    <td class="t-strong">Chemical Bonding Notes</td>
+                    <td>Chemistry</td>
+                    <td>Aug 20, 2026</td>
+                    <td>Aug 28, 2026</td>
+                    <td><span class="pill p-warn">Pending</span></td>
+                  </tr>
+                  <tr>
+                    <td class="t-strong">Essay: My City</td>
+                    <td>English</td>
+                    <td>Aug 18, 2026</td>
+                    <td>Aug 22, 2026</td>
+                    <td><span class="pill p-danger">Overdue</span></td>
+                  </tr>
+                  <tr>
+                    <td class="t-strong">HTML Webpage Task</td>
+                    <td>Computer Science</td>
+                    <td>Aug 15, 2026</td>
+                    <td>Aug 21, 2026</td>
+                    <td><span class="pill p-ok">Submitted</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div class="col-xl-5">
+          <div class="card lift h-100">
+            <div class="card-head">
+              <h3>Upcoming Exams <span class="sub">Mid-Term Examination 2026</span></h3>
+              <a href="exams.php" class="mini-link">Schedule <i class="bi bi-arrow-right"></i></a>
+            </div>
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Exam</th>
+                    <th>Date</th>
+                    <th>Time</th>
+                    <th>Room</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="t-strong">Mid-Term Examination<span class="t-sub">Mathematics</span></td>
+                    <td>Sep 05, 2026</td>
+                    <td>09:00 AM</td>
+                    <td>Room 201</td>
+                    <td><span class="pill p-info">Upcoming</span></td>
+                  </tr>
+                  <tr>
+                    <td class="t-strong">Mid-Term Examination<span class="t-sub">Physics</span></td>
+                    <td>Sep 07, 2026</td>
+                    <td>09:00 AM</td>
+                    <td>Room 105</td>
+                    <td><span class="pill p-info">Upcoming</span></td>
+                  </tr>
+                  <tr>
+                    <td class="t-strong">Mid-Term Examination<span class="t-sub">Computer Science</span></td>
+                    <td>Sep 09, 2026</td>
+                    <td>09:00 AM</td>
+                    <td>Lab 2</td>
+                    <td><span class="pill p-info">Upcoming</span></td>
+                  </tr>
+                  <tr>
+                    <td class="t-strong">Chapter Test<span class="t-sub">Chemistry</span></td>
+                    <td>Sep 12, 2026</td>
+                    <td>11:00 AM</td>
+                    <td>Room 110</td>
+                    <td><span class="pill p-grey">Scheduled</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="card-body">
+              <div class="alert-soft teal"><i class="bi bi-lightbulb"></i><span><b>Study tip:</b> 12 days remain before
+                  Mid-Terms. Revise Chapter 4 of Physics and complete all Algebra practice sets first.</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ------------------ RECENT ATTENDANCE + RESULTS ------------------ -->
+      <section class="row g-3 mt-1 rise">
+        <div class="col-xl-5">
+          <div class="card lift h-100">
+            <div class="card-head">
+              <h3>Recent Attendance <span class="sub">Last recorded 5 days</span></h3>
+            </div>
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Subject</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Aug 24, 2026</td>
+                    <td>Mathematics</td>
+                    <td><span class="pill p-ok">Present</span></td>
+                  </tr>
+                  <tr>
+                    <td>Aug 22, 2026</td>
+                    <td>Physics</td>
+                    <td><span class="pill p-ok">Present</span></td>
+                  </tr>
+                  <tr>
+                    <td>Aug 22, 2026</td>
+                    <td>English</td>
+                    <td><span class="pill p-warn">Late</span></td>
+                  </tr>
+                  <tr>
+                    <td>Aug 21, 2026</td>
+                    <td>Chemistry</td>
+                    <td><span class="pill p-danger">Absent</span></td>
+                  </tr>
+                  <tr>
+                    <td>Aug 20, 2026</td>
+                    <td>Computer Science</td>
+                    <td><span class="pill p-ok">Present</span></td>
+                  </tr>
+                  <tr>
+                    <td>Aug 20, 2026</td>
+                    <td>Urdu</td>
+                    <td><span class="pill p-ok">Present</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div class="col-xl-7">
+          <div class="card lift h-100">
+            <div class="card-head">
+              <h3>Recent Results <span class="sub">Average 82% &middot; Grade A&minus;</span></h3>
+              <a href="results.php" class="mini-link">Full Results <i class="bi bi-arrow-right"></i></a>
+            </div>
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Subject</th>
+                    <th>Exam</th>
+                    <th>Marks</th>
+                    <th>Total</th>
+                    <th>%</th>
+                    <th>Grade</th>
+                    <th>Result</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="t-strong">Mathematics</td>
+                    <td>Monthly Test</td>
+                    <td>85</td>
+                    <td>100</td>
+                    <td>85%</td>
+                    <td><span class="pill p-ok bare">A</span></td>
+                    <td><span class="pill p-ok">Pass</span></td>
+                  </tr>
+                  <tr>
+                    <td class="t-strong">Physics</td>
+                    <td>Quiz</td>
+                    <td>78</td>
+                    <td>100</td>
+                    <td>78%</td>
+                    <td><span class="pill p-teal bare">B+</span></td>
+                    <td><span class="pill p-ok">Pass</span></td>
+                  </tr>
+                  <tr>
+                    <td class="t-strong">Computer Science</td>
+                    <td>Practical</td>
+                    <td>92</td>
+                    <td>100</td>
+                    <td>92%</td>
+                    <td><span class="pill p-ok bare">A+</span></td>
+                    <td><span class="pill p-ok">Pass</span></td>
+                  </tr>
+                  <tr>
+                    <td class="t-strong">Chemistry</td>
+                    <td>Monthly Test</td>
+                    <td>74</td>
+                    <td>100</td>
+                    <td>74%</td>
+                    <td><span class="pill p-teal bare">B</span></td>
+                    <td><span class="pill p-ok">Pass</span></td>
+                  </tr>
+                  <tr>
+                    <td class="t-strong">English</td>
+                    <td>Unit Test</td>
+                    <td>88</td>
+                    <td>100</td>
+                    <td>88%</td>
+                    <td><span class="pill p-ok bare">A</span></td>
+                    <td><span class="pill p-ok">Pass</span></td>
+                  </tr>
+                  <tr>
+                    <td class="t-strong">Urdu</td>
+                    <td>Unit Test</td>
+                    <td>66</td>
+                    <td>100</td>
+                    <td>66%</td>
+                    <td><span class="pill p-warn bare">C+</span></td>
+                    <td><span class="pill p-ok">Pass</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ------------------ FEES + NOTICES ------------------ -->
+      <section class="row g-3 mt-1 rise">
+        <div class="col-xl-4">
+          <div class="card lift h-100">
+            <div class="card-head">
+              <h3>Fees Summary <span class="sub">Invoice INV-2026-0912</span></h3>
+            </div>
+            <div class="card-body">
+              <div class="total-box mb-3">
+                <small>Remaining Balance</small>
+                <strong>Rs. 8,500</strong>
+                <span style="font-size:.74rem;color:#c9e3e6">Due by 10 September 2026</span>
+              </div>
+              <div class="bar-label"><span>Total Fee &middot; Rs. 60,000</span><b>86% paid</b></div>
+              <span class="bar"><i style="width:86%;background:linear-gradient(90deg,var(--ok),#3fbf8e)"></i></span>
+              <div class="divider-soft"></div>
+              <ul class="meta-list mb-3">
+                <li><i class="bi bi-receipt"></i> Total Fee <span>Rs. 60,000</span></li>
+                <li><i class="bi bi-check2-circle"></i> Paid <span>Rs. 51,500</span></li>
+                <li><i class="bi bi-exclamation-circle"></i> Remaining <span>Rs. 8,500</span></li>
+                <li><i class="bi bi-calendar-event"></i> Due Date <span>Sep 10, 2026</span></li>
+              </ul>
+              <a href="fees.php" class="btn-solid w-100 justify-content-center"><i class="bi bi-wallet2"></i> View Fee
+                Details</a>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-xl-4">
+          <div class="card lift h-100">
+            <div class="card-head">
+              <h3>Latest Notices <span class="sub">From the school administration</span></h3>
+            </div>
+            <div class="card-body tight">
+              <div class="notice-row teal">
+                <div class="notice-date"><b>24</b><small>Aug</small></div>
+                <div>
+                  <h4>Mid-Term Examination Schedule</h4>
+                  <p>The date sheet for Mid-Term Examinations 2026 has been published for all classes.</p>
+                  <span class="pill p-info bare">Exam</span>
+                  <a href="notices.php" class="mini-link ms-2">View Notice <i class="bi bi-arrow-right"></i></a>
+                </div>
+              </div>
+              <div class="notice-row amber">
+                <div class="notice-date"><b>22</b><small>Aug</small></div>
+                <div>
+                  <h4>Parent Teacher Meeting</h4>
+                  <p>PTM for Class 9 to 10 will be held on Saturday, 29 August from 09:00 AM to 01:00 PM.</p>
+                  <span class="pill p-violet bare">General</span>
+                  <a href="notices.php" class="mini-link ms-2">View Notice <i class="bi bi-arrow-right"></i></a>
+                </div>
+              </div>
+              <div class="notice-row violet">
+                <div class="notice-date"><b>19</b><small>Aug</small></div>
+                <div>
+                  <h4>School Holiday Notice</h4>
+                  <p>School will remain closed on 14 August for Independence Day celebrations.</p>
+                  <span class="pill p-teal bare">Academic</span>
+                  <a href="notices.php" class="mini-link ms-2">View Notice <i class="bi bi-arrow-right"></i></a>
+                </div>
+              </div>
+              <div class="notice-row ok">
+                <div class="notice-date"><b>15</b><small>Aug</small></div>
+                <div>
+                  <h4>Annual Sports Day</h4>
+                  <p>Trials for track and field events begin next week at the main ground.</p>
+                  <span class="pill p-ok bare">Event</span>
+                  <a href="notices.php" class="mini-link ms-2">View Notice <i class="bi bi-arrow-right"></i></a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-xl-4">
+          <div class="card lift h-100">
+            <div class="card-head">
+              <h3>Upcoming Events <span class="sub">Don&rsquo;t miss out</span></h3>
+            </div>
+            <div class="card-body">
+              <div class="notice-row teal">
+                <div class="notice-date"><b>29</b><small>Aug</small></div>
+                <div>
+                  <h4>Science Exhibition 2026</h4>
+                  <p>School Auditorium &middot; 10:00 AM</p><span class="pill p-ok">Registered</span>
+                </div>
+              </div>
+              <div class="notice-row info">
+                <div class="notice-date"><b>05</b><small>Sep</small></div>
+                <div>
+                  <h4>Mid-Term Examinations Begin</h4>
+                  <p>Examination Hall &middot; 09:00 AM</p><span class="pill p-info">Mandatory</span>
+                </div>
+              </div>
+              <div class="notice-row amber">
+                <div class="notice-date"><b>18</b><small>Sep</small></div>
+                <div>
+                  <h4>Annual Sports Day</h4>
+                  <p>Main Ground &middot; 08:30 AM</p><span class="pill p-warn">Invited</span>
+                </div>
+              </div>
+              <div class="divider-soft"></div>
+              <a href="events.php" class="btn-outline w-100 justify-content-center"><i
+                  class="bi bi-calendar2-heart"></i> Browse All Events</a>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <footer class="page-foot">
+      <span>&copy; 2026 Crescent Public School &middot; Student Portal</span>
+      <span class="d-flex gap-3">
+        <a href="notices.php">Help Centre</a>
+        <a href="messages.php">Contact Office</a>
+        <a href="settings.php">Privacy</a>
+      </span>
+    </footer>
+  </div>
+
+</body>
+
+</html>

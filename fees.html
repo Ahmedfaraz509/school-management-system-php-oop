@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="description" content="Fees — Crescent Public School Student Portal" />
+<title>Fees &middot; Student Portal &middot; Crescent Public School</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
+<link rel="stylesheet" href="css/style.css" />
+<link rel="icon" href="assets/images/logo.svg" type="image/svg+xml" />
+</head>
+<body>
+
+<input type="checkbox" id="navToggle" class="nav-toggle" />
+<label for="navToggle" class="nav-backdrop" aria-hidden="true"></label>
+
+<aside class="app-sidebar">
+  <div class="sidebar-head">
+    <a href="index.html" class="sidebar-brand">
+      <img src="assets/images/logo.svg" alt="Crescent Public School logo" />
+      <span class="brand-text"><strong>Crescent Public School</strong><small>Student Portal</small></span>
+    </a>
+    <label for="navToggle" class="sidebar-close" aria-label="Close navigation"><i class="bi bi-x-lg"></i></label>
+  </div>
+  <div class="student-card">
+    <span class="avatar avatar-lg">AF</span>
+    <div class="student-card-text"><strong>Ahmed Faraz</strong><small>Class 10-A &middot; STU-1024</small></div>
+    <span class="verify" title="Verified student"><i class="bi bi-patch-check-fill"></i></span>
+  </div>
+  <nav class="sidebar-nav">
+    <p class="nav-group">Overview</p>
+    <a class="nav-item" href="index.html"><i class="bi bi-columns-gap"></i><span>Dashboard</span></a>
+    <p class="nav-group">Academics</p>
+    <a class="nav-item" href="subjects.html"><i class="bi bi-journal-bookmark"></i><span>My Subjects</span><em class="nav-tag">6</em></a>
+    <a class="nav-item" href="timetable.html"><i class="bi bi-calendar-week"></i><span>My Timetable</span></a>
+    <a class="nav-item" href="attendance.html"><i class="bi bi-check2-square"></i><span>My Attendance</span></a>
+    <a class="nav-item" href="assignments.html"><i class="bi bi-journal-text"></i><span>Assignments</span><em class="nav-tag nav-tag-warn">4</em></a>
+    <a class="nav-item" href="exams.html"><i class="bi bi-pencil-square"></i><span>Exams</span><em class="nav-tag nav-tag-info">3</em></a>
+    <a class="nav-item" href="results.html"><i class="bi bi-graph-up-arrow"></i><span>Results</span></a>
+    <p class="nav-group">Finance</p>
+    <a class="nav-item active" href="fees.html"><i class="bi bi-wallet2"></i><span>Fees</span><em class="nav-tag nav-tag-danger">1</em></a>
+    <p class="nav-group">School Life</p>
+    <a class="nav-item" href="notices.html"><i class="bi bi-megaphone"></i><span>Notices</span></a>
+    <a class="nav-item" href="events.html"><i class="bi bi-calendar2-heart"></i><span>Events</span></a>
+    <a class="nav-item" href="messages.html"><i class="bi bi-envelope"></i><span>Messages</span><em class="nav-tag">3</em></a>
+    <p class="nav-group">Account</p>
+    <a class="nav-item" href="profile.html"><i class="bi bi-person-badge"></i><span>My Profile</span></a>
+    <a class="nav-item" href="settings.html"><i class="bi bi-gear"></i><span>Settings</span></a>
+  </nav>
+  <div class="sidebar-foot">
+    <a href="#" class="logout-btn"><i class="bi bi-box-arrow-right"></i><span>Logout</span></a>
+    <p class="copy">Portal v2.6 &middot; Session 2026&ndash;27</p>
+  </div>
+</aside>
+
+<div class="app-main">
+  <header class="app-topbar">
+    <label for="navToggle" class="nav-btn" aria-label="Open navigation"><i class="bi bi-list"></i></label>
+    <div class="topbar-title">
+      <h1>Fees</h1>
+      <div class="crumbs"><a href="index.html">Home</a><span>/</span>Finance<span>/</span>Fees</div>
+    </div>
+    <div class="topbar-search"><i class="bi bi-search"></i><input type="search" placeholder="Search invoices&hellip;" aria-label="Search" /></div>
+    <div class="topbar-actions">
+      <div class="icon-drop">
+        <a href="notices.html" class="icon-btn" aria-label="Notifications"><i class="bi bi-bell"></i><span class="ping">5</span></a>
+        <div class="drop-panel">
+          <div class="drop-head"><strong>Notifications</strong><a href="notices.html">View all</a></div>
+          <a href="fees.html" class="drop-row"><i class="dot-ico p-danger"><i class="bi bi-wallet2"></i></i><span><p>Fee instalment due on Sep 10</p><small>Accounts Office &middot; 3 days ago</small></span></a>
+          <a href="exams.html" class="drop-row"><i class="dot-ico p-info"><i class="bi bi-pencil-square"></i></i><span><p>Mid-Term timetable published</p><small>Examination Cell &middot; 2 hours ago</small></span></a>
+        </div>
+      </div>
+      <div class="icon-drop">
+        <a href="messages.html" class="icon-btn" aria-label="Messages"><i class="bi bi-envelope"></i><span class="ping">3</span></a>
+        <div class="drop-panel">
+          <div class="drop-head"><strong>Messages</strong><a href="messages.html">Open inbox</a></div>
+          <a href="messages.html" class="drop-row"><span class="avatar amber">AC</span><span><p>Accounts Office &middot; Fee reminder</p><small>Aug 21, 2026</small></span></a>
+        </div>
+      </div>
+      <div class="icon-drop">
+        <a href="profile.html" class="profile-chip"><span class="avatar">AF</span><span class="who"><b>Ahmed Faraz</b><small>Class 10-A</small></span><i class="bi bi-chevron-down"></i></a>
+        <div class="drop-panel">
+          <div class="drop-head"><strong>Ahmed Faraz</strong><span class="pill p-ok">Active</span></div>
+          <a href="profile.html" class="drop-row"><i class="dot-ico p-teal"><i class="bi bi-person-badge"></i></i><span><p>My Profile</p><small>STU-1024</small></span></a>
+          <a href="settings.html" class="drop-row"><i class="dot-ico p-violet"><i class="bi bi-gear"></i></i><span><p>Settings</p><small>Preferences &amp; alerts</small></span></a>
+          <a href="#" class="drop-row"><i class="dot-ico p-danger"><i class="bi bi-box-arrow-right"></i></i><span><p>Logout</p><small>End this session</small></span></a>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="app-content">
+
+    <section class="welcome rise">
+      <div class="row g-4 align-items-center">
+        <div class="col-lg-8">
+          <span class="eyebrow">Accounts Office &middot; Session 2026&ndash;27</span>
+          <h2>Rs. 8,500 pending &mdash; due 10 September 2026</h2>
+          <p>You have cleared Rs. 51,500 of the Rs. 60,000 annual fee. The September instalment of Rs. 8,500 is the only outstanding invoice this session.</p>
+          <div class="quick-chips">
+            <a href="fees.html" class="chip"><i class="bi bi-receipt"></i> Download Challan</a>
+            <a href="messages.html" class="chip"><i class="bi bi-envelope"></i> Contact Accounts</a>
+            <a href="notices.html" class="chip"><i class="bi bi-megaphone"></i> Fee Notices</a>
+          </div>
+        </div>
+        <div class="col-lg-4">
+          <div class="row g-2">
+            <div class="col-6"><div class="fact"><small>Annual Fee</small><strong>Rs. 60,000</strong><span>Session total</span></div></div>
+            <div class="col-6"><div class="fact"><small>Paid</small><strong>Rs. 51,500</strong><span>86% cleared</span></div></div>
+            <div class="col-6"><div class="fact"><small>Remaining</small><strong>Rs. 8,500</strong><span>1 invoice</span></div></div>
+            <div class="col-6"><div class="fact"><small>Due Date</small><strong>10 Sep 2026</strong><span>17 days left</span></div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="row g-3 mt-4">
+      <div class="col-6 col-xl-3 rise rise-1">
+        <div class="stat-card teal">
+          <div class="stat-top"><span class="stat-ico"><i class="bi bi-cash-coin"></i></span><span class="stat-trend flat">Session</span></div>
+          <h3 class="stat-num">Rs.<small>60,000</small></h3>
+          <p class="stat-title">Total Fees</p>
+          <p class="stat-desc">Tuition, lab &amp; annual charges</p>
+          <span class="stat-bar"><i style="width:100%"></i></span>
+        </div>
+      </div>
+      <div class="col-6 col-xl-3 rise rise-2">
+        <div class="stat-card ok">
+          <div class="stat-top"><span class="stat-ico"><i class="bi bi-check2-circle"></i></span><span class="stat-trend">86% paid</span></div>
+          <h3 class="stat-num">Rs.<small>51,500</small></h3>
+          <p class="stat-title">Paid</p>
+          <p class="stat-desc">Across 6 cleared invoices</p>
+          <span class="stat-bar"><i style="width:86%"></i></span>
+        </div>
+      </div>
+      <div class="col-6 col-xl-3 rise rise-3">
+        <div class="stat-card amber">
+          <div class="stat-top"><span class="stat-ico"><i class="bi bi-hourglass-split"></i></span><span class="stat-trend down">Due Sep 10</span></div>
+          <h3 class="stat-num">Rs.<small>8,500</small></h3>
+          <p class="stat-title">Pending</p>
+          <p class="stat-desc">September monthly instalment</p>
+          <span class="stat-bar"><i style="width:14%"></i></span>
+        </div>
+      </div>
+      <div class="col-6 col-xl-3 rise rise-4">
+        <div class="stat-card danger">
+          <div class="stat-top"><span class="stat-ico"><i class="bi bi-exclamation-octagon"></i></span><span class="stat-trend flat">Clear record</span></div>
+          <h3 class="stat-num">Rs.<small>0</small></h3>
+          <p class="stat-title">Overdue</p>
+          <p class="stat-desc">No late payment fines applied</p>
+          <span class="stat-bar"><i style="width:2%"></i></span>
+        </div>
+      </div>
+    </section>
+
+    <section class="row g-3 mt-1">
+      <div class="col-xl-8 rise">
+        <div class="card lift h-100">
+          <div class="card-head">
+            <h3>Fee Invoices <span class="sub">Session 2026&ndash;27 challans</span></h3>
+            <span class="pill p-teal"><i class="bi bi-receipt"></i> 7 invoices</span>
+          </div>
+          <div class="table-responsive">
+            <table class="table">
+              <thead><tr><th>Invoice ID</th><th>Fee Type</th><th>Amount</th><th>Paid</th><th>Remaining</th><th>Due Date</th><th>Status</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td class="t-strong">INV-2026-0912</td><td>September Tuition Fee</td><td>Rs. 8,500</td><td>Rs. 0</td><td class="t-strong">Rs. 8,500</td><td>Sep 10, 2026</td>
+                  <td><span class="pill p-warn">Pending</span></td>
+                </tr>
+                <tr>
+                  <td class="t-strong">INV-2026-0810</td><td>August Tuition Fee</td><td>Rs. 8,500</td><td>Rs. 8,500</td><td>Rs. 0</td><td>Aug 10, 2026</td>
+                  <td><span class="pill p-ok">Paid</span></td>
+                </tr>
+                <tr>
+                  <td class="t-strong">INV-2026-0710</td><td>July Tuition Fee</td><td>Rs. 8,500</td><td>Rs. 8,500</td><td>Rs. 0</td><td>Jul 10, 2026</td>
+                  <td><span class="pill p-ok">Paid</span></td>
+                </tr>
+                <tr>
+                  <td class="t-strong">INV-2026-0610</td><td>June Tuition Fee</td><td>Rs. 8,500</td><td>Rs. 8,500</td><td>Rs. 0</td><td>Jun 10, 2026</td>
+                  <td><span class="pill p-ok">Paid</span></td>
+                </tr>
+                <tr>
+                  <td class="t-strong">INV-2026-0510</td><td>May Tuition Fee</td><td>Rs. 8,500</td><td>Rs. 8,500</td><td>Rs. 0</td><td>May 10, 2026</td>
+                  <td><span class="pill p-ok">Paid</span></td>
+                </tr>
+                <tr>
+                  <td class="t-strong">INV-2026-0410</td><td>April Tuition Fee</td><td>Rs. 8,500</td><td>Rs. 8,500</td><td>Rs. 0</td><td>Apr 10, 2026</td>
+                  <td><span class="pill p-ok">Paid</span></td>
+                </tr>
+                <tr>
+                  <td class="t-strong">INV-2026-0101</td><td>Admission &amp; Annual Charges</td><td>Rs. 9,000</td><td>Rs. 9,000</td><td>Rs. 0</td><td>Apr 01, 2026</td>
+                  <td><span class="pill p-ok">Paid</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-xl-4 rise rise-2">
+        <div class="card lift h-100">
+          <div class="card-head"><h3>Payment Progress <span class="sub">Annual fee settlement</span></h3></div>
+          <div class="card-body">
+            <div class="total-box mb-3">
+              <small>Outstanding Balance</small>
+              <strong>Rs. 8,500</strong>
+              <span style="font-size:.74rem;color:#c9e3e6">Due by 10 September 2026</span>
+            </div>
+            <div class="bar-label"><span>Paid Rs. 51,500 of Rs. 60,000</span><b>86%</b></div>
+            <span class="bar mb-3" style="height:12px"><i style="width:86%;background:linear-gradient(90deg,var(--ok),#3fbf8e)"></i></span>
+            <ul class="meta-list">
+              <li><i class="bi bi-cash-coin"></i> Total Fee <span>Rs. 60,000</span></li>
+              <li><i class="bi bi-check2-circle"></i> Paid <span>Rs. 51,500</span></li>
+              <li><i class="bi bi-exclamation-circle"></i> Remaining <span>Rs. 8,500</span></li>
+              <li><i class="bi bi-calendar-event"></i> Due Date <span>Sep 10, 2026</span></li>
+              <li><i class="bi bi-percent"></i> Late Fee <span>Rs. 0</span></li>
+              <li><i class="bi bi-bank"></i> Payable At <span>School Accounts / Bank</span></li>
+            </ul>
+            <div class="divider-soft"></div>
+            <div class="alert-soft amber"><i class="bi bi-info-circle"></i><span>This is a static demo page &mdash; no live payment processing is enabled. Please deposit the challan at the school accounts office.</span></div>
+            <div class="d-grid gap-2 mt-3">
+              <a href="fees.html" class="btn-solid justify-content-center"><i class="bi bi-download"></i> Download Challan</a>
+              <a href="messages.html" class="btn-outline justify-content-center"><i class="bi bi-envelope"></i> Contact Accounts</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="mt-4 rise">
+      <div class="card lift">
+        <div class="card-head">
+          <h3>Payment History <span class="sub">Receipts issued by the accounts office</span></h3>
+          <span class="pill p-ok"><i class="bi bi-check2-all"></i> 6 receipts</span>
+        </div>
+        <div class="table-responsive">
+          <table class="table">
+            <thead><tr><th>Receipt No.</th><th>Date Paid</th><th>Invoice ID</th><th>Method</th><th>Amount</th><th>Received By</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr><td class="t-strong">RCP-04512</td><td>Aug 06, 2026</td><td>INV-2026-0810</td><td>Bank Transfer</td><td>Rs. 8,500</td><td>Accounts Office</td><td><span class="pill p-ok">Cleared</span></td></tr>
+              <tr><td class="t-strong">RCP-04388</td><td>Jul 05, 2026</td><td>INV-2026-0710</td><td>Cash &mdash; Counter 2</td><td>Rs. 8,500</td><td>Mr. Kashif Ali</td><td><span class="pill p-ok">Cleared</span></td></tr>
+              <tr><td class="t-strong">RCP-04265</td><td>Jun 04, 2026</td><td>INV-2026-0610</td><td>Bank Transfer</td><td>Rs. 8,500</td><td>Accounts Office</td><td><span class="pill p-ok">Cleared</span></td></tr>
+              <tr><td class="t-strong">RCP-04102</td><td>May 06, 2026</td><td>INV-2026-0510</td><td>Bank Transfer</td><td>Rs. 8,500</td><td>Accounts Office</td><td><span class="pill p-ok">Cleared</span></td></tr>
+              <tr><td class="t-strong">RCP-03980</td><td>Apr 07, 2026</td><td>INV-2026-0410</td><td>Cash &mdash; Counter 2</td><td>Rs. 8,500</td><td>Mr. Kashif Ali</td><td><span class="pill p-ok">Cleared</span></td></tr>
+              <tr><td class="t-strong">RCP-03801</td><td>Apr 01, 2026</td><td>INV-2026-0101</td><td>Pay Order</td><td>Rs. 9,000</td><td>Accounts Office</td><td><span class="pill p-ok">Cleared</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="row g-3 mt-1 rise">
+      <div class="col-lg-4">
+        <div class="card lift h-100">
+          <div class="card-head"><h3>Fee Structure <span class="sub">Class 10 &middot; 2026&ndash;27</span></h3></div>
+          <div class="card-body">
+            <ul class="meta-list">
+              <li><i class="bi bi-mortarboard"></i> Tuition (monthly) <span>Rs. 8,500</span></li>
+              <li><i class="bi bi-flask"></i> Laboratory charges <span>Included</span></li>
+              <li><i class="bi bi-bus-front"></i> Transport <span>Not opted</span></li>
+              <li><i class="bi bi-book"></i> Library &amp; sports <span>Included</span></li>
+              <li><i class="bi bi-shield-check"></i> Admission fee <span>Rs. 9,000 (one time)</span></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-4">
+        <div class="card lift h-100">
+          <div class="card-head"><h3>Concessions <span class="sub">Applied discounts</span></h3></div>
+          <div class="card-body">
+            <div class="alert-soft teal mb-3"><i class="bi bi-award"></i><span><b>Merit scholarship &mdash; 10%</b> applied on tuition for the session based on previous year results.</span></div>
+            <ul class="meta-list">
+              <li><i class="bi bi-percent"></i> Scholarship <span>Rs. 6,000 / year</span></li>
+              <li><i class="bi bi-people"></i> Sibling discount <span>Not applicable</span></li>
+              <li><i class="bi bi-calendar-check"></i> Renewal review <span>Apr 2027</span></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-4">
+        <div class="card lift h-100">
+          <div class="card-head"><h3>Accounts Office <span class="sub">Help &amp; timings</span></h3></div>
+          <div class="card-body">
+            <ul class="meta-list">
+              <li><i class="bi bi-geo-alt"></i> Location <span>Block A, Ground Floor</span></li>
+              <li><i class="bi bi-clock"></i> Timings <span>08:00 AM &ndash; 01:00 PM</span></li>
+              <li><i class="bi bi-telephone"></i> Phone <span>+92 51 111 222 333</span></li>
+              <li><i class="bi bi-envelope"></i> Email <span>accounts@crescent.edu</span></li>
+            </ul>
+            <div class="divider-soft"></div>
+            <a href="messages.html" class="btn-outline w-100 justify-content-center"><i class="bi bi-chat-dots"></i> Raise a Query</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="page-foot">
+    <span>&copy; 2026 Crescent Public School &middot; Student Portal</span>
+    <span class="d-flex gap-3"><a href="notices.html">Help Centre</a><a href="messages.html">Contact Office</a><a href="settings.html">Privacy</a></span>
+  </footer>
+</div>
+
+</body>
+</html>

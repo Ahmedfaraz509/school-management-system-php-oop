@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="description" content="My Profile — Crescent Public School Student Portal" />
+<title>My Profile &middot; Student Portal &middot; Crescent Public School</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
+<link rel="stylesheet" href="css/style.css" />
+<link rel="icon" href="assets/images/logo.svg" type="image/svg+xml" />
+</head>
+<body>
+
+<input type="checkbox" id="navToggle" class="nav-toggle" />
+<label for="navToggle" class="nav-backdrop" aria-hidden="true"></label>
+
+<aside class="app-sidebar">
+  <div class="sidebar-head">
+    <a href="index.html" class="sidebar-brand">
+      <img src="assets/images/logo.svg" alt="Crescent Public School logo" />
+      <span class="brand-text"><strong>Crescent Public School</strong><small>Student Portal</small></span>
+    </a>
+    <label for="navToggle" class="sidebar-close" aria-label="Close navigation"><i class="bi bi-x-lg"></i></label>
+  </div>
+  <div class="student-card">
+    <span class="avatar avatar-lg">AF</span>
+    <div class="student-card-text"><strong>Ahmed Faraz</strong><small>Class 10-A &middot; STU-1024</small></div>
+    <span class="verify" title="Verified student"><i class="bi bi-patch-check-fill"></i></span>
+  </div>
+  <nav class="sidebar-nav">
+    <p class="nav-group">Overview</p>
+    <a class="nav-item" href="index.html"><i class="bi bi-columns-gap"></i><span>Dashboard</span></a>
+    <p class="nav-group">Academics</p>
+    <a class="nav-item" href="subjects.html"><i class="bi bi-journal-bookmark"></i><span>My Subjects</span><em class="nav-tag">6</em></a>
+    <a class="nav-item" href="timetable.html"><i class="bi bi-calendar-week"></i><span>My Timetable</span></a>
+    <a class="nav-item" href="attendance.html"><i class="bi bi-check2-square"></i><span>My Attendance</span></a>
+    <a class="nav-item" href="assignments.html"><i class="bi bi-journal-text"></i><span>Assignments</span><em class="nav-tag nav-tag-warn">4</em></a>
+    <a class="nav-item" href="exams.html"><i class="bi bi-pencil-square"></i><span>Exams</span><em class="nav-tag nav-tag-info">3</em></a>
+    <a class="nav-item" href="results.html"><i class="bi bi-graph-up-arrow"></i><span>Results</span></a>
+    <p class="nav-group">Finance</p>
+    <a class="nav-item" href="fees.html"><i class="bi bi-wallet2"></i><span>Fees</span><em class="nav-tag nav-tag-danger">1</em></a>
+    <p class="nav-group">School Life</p>
+    <a class="nav-item" href="notices.html"><i class="bi bi-megaphone"></i><span>Notices</span></a>
+    <a class="nav-item" href="events.html"><i class="bi bi-calendar2-heart"></i><span>Events</span></a>
+    <a class="nav-item" href="messages.html"><i class="bi bi-envelope"></i><span>Messages</span><em class="nav-tag">3</em></a>
+    <p class="nav-group">Account</p>
+    <a class="nav-item active" href="profile.html"><i class="bi bi-person-badge"></i><span>My Profile</span></a>
+    <a class="nav-item" href="settings.html"><i class="bi bi-gear"></i><span>Settings</span></a>
+  </nav>
+  <div class="sidebar-foot">
+    <a href="#" class="logout-btn"><i class="bi bi-box-arrow-right"></i><span>Logout</span></a>
+    <p class="copy">Portal v2.6 &middot; Session 2026&ndash;27</p>
+  </div>
+</aside>
+
+<div class="app-main">
+  <header class="app-topbar">
+    <label for="navToggle" class="nav-btn" aria-label="Open navigation"><i class="bi bi-list"></i></label>
+    <div class="topbar-title">
+      <h1>My Profile</h1>
+      <div class="crumbs"><a href="index.html">Home</a><span>/</span>Account<span>/</span>My Profile</div>
+    </div>
+    <div class="topbar-search"><i class="bi bi-search"></i><input type="search" placeholder="Search the portal&hellip;" aria-label="Search" /></div>
+    <div class="topbar-actions">
+      <div class="icon-drop">
+        <a href="notices.html" class="icon-btn" aria-label="Notifications"><i class="bi bi-bell"></i><span class="ping">5</span></a>
+        <div class="drop-panel">
+          <div class="drop-head"><strong>Notifications</strong><a href="notices.html">View all</a></div>
+          <a href="exams.html" class="drop-row"><i class="dot-ico p-info"><i class="bi bi-pencil-square"></i></i><span><p>Mid-Term timetable published</p><small>Examination Cell &middot; 2 hours ago</small></span></a>
+          <a href="fees.html" class="drop-row"><i class="dot-ico p-danger"><i class="bi bi-wallet2"></i></i><span><p>Fee instalment due on Sep 10</p><small>Accounts Office &middot; 3 days ago</small></span></a>
+        </div>
+      </div>
+      <div class="icon-drop">
+        <a href="messages.html" class="icon-btn" aria-label="Messages"><i class="bi bi-envelope"></i><span class="ping">3</span></a>
+        <div class="drop-panel">
+          <div class="drop-head"><strong>Messages</strong><a href="messages.html">Open inbox</a></div>
+          <a href="messages.html" class="drop-row"><span class="avatar info">SR</span><span><p>Ms. Sara Khan &middot; Lab report feedback</p><small>Today, 09:14 AM</small></span></a>
+        </div>
+      </div>
+      <div class="icon-drop">
+        <a href="profile.html" class="profile-chip"><span class="avatar">AF</span><span class="who"><b>Ahmed Faraz</b><small>Class 10-A</small></span><i class="bi bi-chevron-down"></i></a>
+        <div class="drop-panel">
+          <div class="drop-head"><strong>Ahmed Faraz</strong><span class="pill p-ok">Active</span></div>
+          <a href="profile.html" class="drop-row"><i class="dot-ico p-teal"><i class="bi bi-person-badge"></i></i><span><p>My Profile</p><small>STU-1024</small></span></a>
+          <a href="settings.html" class="drop-row"><i class="dot-ico p-violet"><i class="bi bi-gear"></i></i><span><p>Settings</p><small>Preferences &amp; alerts</small></span></a>
+          <a href="#" class="drop-row"><i class="dot-ico p-danger"><i class="bi bi-box-arrow-right"></i></i><span><p>Logout</p><small>End this session</small></span></a>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="app-content">
+
+    <!-- PROFILE HEADER -->
+    <section class="welcome rise">
+      <div class="row g-4 align-items-center">
+        <div class="col-md-auto text-md-start text-center">
+          <img src="assets/images/avatar.svg" alt="Ahmed Faraz" width="120" height="120"
+               style="border-radius:28px;border:3px solid rgba(255,255,255,.35);background:rgba(255,255,255,.12);padding:4px" />
+        </div>
+        <div class="col-md">
+          <span class="eyebrow">Student Record &middot; Verified</span>
+          <h2>Ahmed Faraz</h2>
+          <p>Class 10-A &middot; Section A &middot; Student ID STU-1024 &middot; Roll No. 10-A-24<br />Admitted 05 April 2021 &middot; Session 2026&ndash;27</p>
+          <div class="quick-chips">
+            <span class="chip"><i class="bi bi-patch-check"></i> Active Enrolment</span>
+            <span class="chip"><i class="bi bi-award"></i> Merit Scholarship 10%</span>
+            <span class="chip"><i class="bi bi-house-door"></i> House: Ravi</span>
+          </div>
+        </div>
+        <div class="col-md-auto">
+          <div class="row g-2">
+            <div class="col-6 col-md-12"><div class="fact"><small>Attendance</small><strong>92%</strong><span>Term 1</span></div></div>
+            <div class="col-6 col-md-12"><div class="fact"><small>GPA</small><strong>3.7 / 4.0</strong><span>Grade A</span></div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="row g-3 mt-1">
+
+      <!-- PERSONAL -->
+      <div class="col-xl-4 rise">
+        <div class="card lift h-100">
+          <div class="card-head"><h3>Personal Details <span class="sub">As per school records</span></h3></div>
+          <div class="card-body">
+            <dl class="info-grid mb-0">
+              <div class="info-row"><dt><i class="bi bi-person"></i> Student Name</dt><dd>Ahmed Faraz</dd></div>
+              <div class="info-row"><dt><i class="bi bi-hash"></i> Student ID</dt><dd>STU-1024</dd></div>
+              <div class="info-row"><dt><i class="bi bi-mortarboard"></i> Class</dt><dd>10</dd></div>
+              <div class="info-row"><dt><i class="bi bi-diagram-3"></i> Section</dt><dd>A</dd></div>
+              <div class="info-row"><dt><i class="bi bi-cake2"></i> Date of Birth</dt><dd>14 March 2011</dd></div>
+              <div class="info-row"><dt><i class="bi bi-gender-ambiguous"></i> Gender</dt><dd>Male</dd></div>
+              <div class="info-row"><dt><i class="bi bi-envelope"></i> Email</dt><dd>ahmed.faraz@student.crescent.edu</dd></div>
+              <div class="info-row"><dt><i class="bi bi-telephone"></i> Phone</dt><dd>+92 301 5551024</dd></div>
+            </dl>
+          </div>
+        </div>
+      </div>
+
+      <!-- GUARDIAN -->
+      <div class="col-xl-4 rise rise-2">
+        <div class="card lift h-100">
+          <div class="card-head"><h3>Guardian &amp; Address <span class="sub">Emergency contact</span></h3></div>
+          <div class="card-body">
+            <div class="d-flex align-items-center gap-3 mb-3">
+              <span class="avatar avatar-lg ok">MF</span>
+              <div>
+                <h3 style="font-size:.98rem">Mr. Muhammad Faraz</h3>
+                <p class="mb-0" style="font-size:.76rem;color:var(--muted)">Father &middot; Primary guardian</p>
+              </div>
+            </div>
+            <dl class="info-grid mb-0">
+              <div class="info-row"><dt><i class="bi bi-person-check"></i> Parent Name</dt><dd>Muhammad Faraz</dd></div>
+              <div class="info-row"><dt><i class="bi bi-telephone"></i> Parent Phone</dt><dd>+92 300 7778899</dd></div>
+              <div class="info-row"><dt><i class="bi bi-briefcase"></i> Occupation</dt><dd>Civil Engineer</dd></div>
+              <div class="info-row"><dt><i class="bi bi-envelope-at"></i> Parent Email</dt><dd>m.faraz@example.com</dd></div>
+              <div class="info-row"><dt><i class="bi bi-geo-alt"></i> Address</dt><dd>House 42, Street 7, Satellite Town, Rawalpindi</dd></div>
+              <div class="info-row"><dt><i class="bi bi-calendar-check"></i> Admission Date</dt><dd>05 April 2021</dd></div>
+            </dl>
+          </div>
+        </div>
+      </div>
+
+      <!-- ACADEMIC -->
+      <div class="col-xl-4 rise rise-3">
+        <div class="card lift h-100">
+          <div class="card-head"><h3>Academic Snapshot <span class="sub">Session 2026&ndash;27</span></h3></div>
+          <div class="card-body">
+            <ul class="meta-list">
+              <li><i class="bi bi-journal-bookmark"></i> Subjects <span>6</span></li>
+              <li><i class="bi bi-check2-circle"></i> Attendance <span>92%</span></li>
+              <li><i class="bi bi-graph-up-arrow"></i> GPA <span>3.7</span></li>
+              <li><i class="bi bi-trophy"></i> Class Position <span>3 / 32</span></li>
+              <li><i class="bi bi-star"></i> House <span>Ravi &mdash; 180 pts</span></li>
+              <li><i class="bi bi-people"></i> Class Teacher <span>Ms. Farah Noor</span></li>
+            </ul>
+            <div class="divider-soft"></div>
+            <div class="alert-soft teal"><i class="bi bi-quote"></i><span><b>Remark:</b> &ldquo;A conscientious student with strong analytical ability. Should target Urdu writing practice.&rdquo;</span></div>
+            <div class="d-grid gap-2 mt-3">
+              <a href="results.html" class="btn-solid justify-content-center"><i class="bi bi-file-earmark-text"></i> View Report Card</a>
+              <a href="settings.html" class="btn-outline justify-content-center"><i class="bi bi-gear"></i> Account Settings</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- EDIT FORM -->
+    <section class="mt-4 rise">
+      <div class="card lift">
+        <div class="card-head">
+          <h3>Edit Profile <span class="sub">Front-end form &mdash; demonstration only, nothing is saved</span></h3>
+          <span class="pill p-teal"><i class="bi bi-pencil-square"></i> Editable fields</span>
+        </div>
+        <div class="card-body">
+          <form>
+            <h4 style="font-size:.78rem;letter-spacing:.14em;text-transform:uppercase;color:var(--brand);margin-bottom:1rem">Personal Information</h4>
+            <div class="row g-3">
+              <div class="col-md-6 col-lg-4">
+                <label class="form-label" for="fullName">Full Name</label>
+                <input type="text" class="form-control" id="fullName" value="Ahmed Faraz" />
+              </div>
+              <div class="col-md-6 col-lg-4">
+                <label class="form-label" for="studentId">Student ID</label>
+                <input type="text" class="form-control" id="studentId" value="STU-1024" readonly />
+                <div class="form-text">Student ID cannot be changed.</div>
+              </div>
+              <div class="col-md-6 col-lg-4">
+                <label class="form-label" for="classSel">Class</label>
+                <select class="form-select" id="classSel"><option selected>10</option><option>9</option><option>8</option></select>
+              </div>
+              <div class="col-md-6 col-lg-4">
+                <label class="form-label" for="sectionSel">Section</label>
+                <select class="form-select" id="sectionSel"><option selected>A</option><option>B</option><option>C</option></select>
+              </div>
+              <div class="col-md-6 col-lg-4">
+                <label class="form-label" for="dob">Date of Birth</label>
+                <input type="date" class="form-control" id="dob" value="2011-03-14" />
+              </div>
+              <div class="col-md-6 col-lg-4">
+                <label class="form-label" for="gender">Gender</label>
+                <select class="form-select" id="gender"><option selected>Male</option><option>Female</option><option>Other</option></select>
+              </div>
+
+              <div class="col-12"><div class="divider-soft"></div></div>
+
+              <div class="col-md-6 col-lg-4">
+                <label class="form-label" for="email">Email Address</label>
+                <input type="email" class="form-control" id="email" value="ahmed.faraz@student.crescent.edu" />
+              </div>
+              <div class="col-md-6 col-lg-4">
+                <label class="form-label" for="phone">Phone Number</label>
+                <input type="tel" class="form-control" id="phone" value="+92 301 5551024" />
+              </div>
+              <div class="col-md-6 col-lg-4">
+                <label class="form-label" for="blood">Blood Group</label>
+                <select class="form-select" id="blood"><option>B+</option><option selected>O+</option><option>A+</option><option>AB+</option></select>
+              </div>
+              <div class="col-md-6 col-lg-4">
+                <label class="form-label" for="parentName">Parent / Guardian Name</label>
+                <input type="text" class="form-control" id="parentName" value="Muhammad Faraz" />
+              </div>
+              <div class="col-md-6 col-lg-4">
+                <label class="form-label" for="parentPhone">Parent Phone</label>
+                <input type="tel" class="form-control" id="parentPhone" value="+92 300 7778899" />
+              </div>
+              <div class="col-md-6 col-lg-4">
+                <label class="form-label" for="admission">Admission Date</label>
+                <input type="date" class="form-control" id="admission" value="2021-04-05" />
+              </div>
+              <div class="col-12">
+                <label class="form-label" for="address">Home Address</label>
+                <textarea class="form-control" id="address" rows="2">House 42, Street 7, Satellite Town, Rawalpindi</textarea>
+              </div>
+
+              <div class="col-12">
+                <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center">
+                  <span style="font-size:.76rem;color:var(--muted)"><i class="bi bi-shield-lock me-1"></i>Changes to name, date of birth or admission records require verification by the school office.</span>
+                  <span class="d-flex gap-2">
+                    <a href="profile.html" class="btn-outline"><i class="bi bi-arrow-counterclockwise"></i> Reset</a>
+                    <a href="profile.html" class="btn-solid"><i class="bi bi-check2"></i> Save Changes</a>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <section class="row g-3 mt-1 rise">
+      <div class="col-lg-4">
+        <div class="card lift h-100">
+          <div class="card-head"><h3>Documents <span class="sub">Uploaded records</span></h3></div>
+          <div class="card-body tight">
+            <div class="notice-row teal"><div class="notice-date"><b><i class="bi bi-file-earmark-text"></i></b><small>ID</small></div><div><h4>School Identity Card</h4><p>Verified &middot; Valid till Mar 2027</p><span class="pill p-ok">Verified</span></div></div>
+            <div class="notice-row info"><div class="notice-date"><b><i class="bi bi-file-earmark-pdf"></i></b><small>PDF</small></div><div><h4>Birth Certificate</h4><p>Uploaded 05 Apr 2021</p><span class="pill p-ok">Verified</span></div></div>
+            <div class="notice-row amber"><div class="notice-date"><b><i class="bi bi-file-earmark-medical"></i></b><small>PDF</small></div><div><h4>Vaccination Record</h4><p>Uploaded 12 Apr 2021</p><span class="pill p-warn">Under Review</span></div></div>
+            <div class="notice-row violet"><div class="notice-date"><b><i class="bi bi-camera"></i></b><small>JPG</small></div><div><h4>Profile Photograph</h4><p>Updated 10 Aug 2026</p><span class="pill p-ok">Approved</span></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-4">
+        <div class="card lift h-100">
+          <div class="card-head"><h3>Achievements <span class="sub">Session 2025&ndash;27</span></h3></div>
+          <div class="card-body">
+            <ul class="meta-list">
+              <li><i class="bi bi-trophy"></i> Inter-House Quiz <span>2nd Place</span></li>
+              <li><i class="bi bi-award"></i> Merit Scholarship <span>10% waiver</span></li>
+              <li><i class="bi bi-star"></i> Monthly Star Award <span>May 2026</span></li>
+              <li><i class="bi bi-mortarboard"></i> Science Club <span>Member</span></li>
+              <li><i class="bi bi-people"></i> Class Monitor <span>2025&ndash;26</span></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-4">
+        <div class="card lift h-100">
+          <div class="card-head"><h3>Account Activity <span class="sub">Recent portal logins</span></h3></div>
+          <div class="card-body">
+            <ul class="meta-list">
+              <li><i class="bi bi-laptop"></i> Chrome on Windows <span>Today, 08:02 AM</span></li>
+              <li><i class="bi bi-phone"></i> Mobile app &middot; Android <span>Yesterday, 07:41 PM</span></li>
+              <li><i class="bi bi-laptop"></i> Library computer <span>22 Aug 2026</span></li>
+              <li><i class="bi bi-phone"></i> Mobile app &middot; Android <span>21 Aug 2026</span></li>
+            </ul>
+            <div class="divider-soft"></div>
+            <div class="alert-soft amber"><i class="bi bi-shield-exclamation"></i><span>Recognise all these devices? If not, change your password from <a href="settings.html" style="color:inherit;text-decoration:underline">Settings</a>.</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="page-foot">
+    <span>&copy; 2026 Crescent Public School &middot; Student Portal</span>
+    <span class="d-flex gap-3"><a href="notices.html">Help Centre</a><a href="messages.html">Contact Office</a><a href="settings.html">Privacy</a></span>
+  </footer>
+</div>
+
+</body>
+</html>
